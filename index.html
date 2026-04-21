@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -561,16 +562,29 @@ function doRescue(){
       <div style="font-family:var(--mono);font-size:11px;color:var(--t2);margin-top:3px">[read-only] [no gas] [no signing]</div>
       <div class="ssteps">${STEPS.map((s,i)=>`<div class="sstep" id="ss${i}"><span class="si">...</span>${s}</div>`).join('')}</div>
     </div>`;
-  /* REAL API CALL — uncomment when api/scan.js is deployed:
-  fetch('/api/scan?address='+encodeURIComponent(v))
-    .then(r=>r.json())
-    .then(data=>{ clearInterval(scanIv); showResults(data.nfts); btn.disabled=false; btn.textContent='Rescue my art'; })
-    .catch(()=>{ toast('Scan failed. Check your address and try again.'); btn.disabled=false; btn.textContent='Rescue my art'; });
-  */
+  // Animate the scan steps while real API call runs
   let i=0;const scanIv=setInterval(()=>{
     document.getElementById('ss'+i)?.classList.add('done');i++;
-    if(i>=STEPS.length){clearInterval(scanIv);btn.disabled=false;btn.textContent='Rescue my art';setTimeout(()=>showResults(MOCK),300);}
+    if(i>=STEPS.length)clearInterval(scanIv);
   },500);
+
+  fetch('/api/scan?address='+encodeURIComponent(v))
+    .then(r=>r.json())
+    .then(data=>{
+      clearInterval(scanIv);
+      STEPS.forEach((_,idx)=>document.getElementById('ss'+idx)?.classList.add('done'));
+      btn.disabled=false;btn.textContent='Rescue my art';
+      if(data.nfts&&data.nfts.length>0){
+        setTimeout(()=>showResults(data.nfts),300);
+      } else {
+        document.getElementById('results-area').innerHTML=`<div class="scanning"><p class="stext">No Foundation NFTs found for this address.</p><p style="font-size:13px;color:var(--t2);margin-top:8px">Double-check your wallet address and try again.</p></div>`;
+      }
+    })
+    .catch(()=>{
+      clearInterval(scanIv);
+      btn.disabled=false;btn.textContent='Rescue my art';
+      toast('Scan failed. Check your address and try again.');
+    });
 }
 
 function showResults(nfts){
@@ -616,12 +630,9 @@ async function pinOne(isFromPinAll,i,cm,cv,title,total){
   btn.textContent='Pinning...';btn.style.opacity='.55';btn.disabled=true;
 
   try{
-    /* REAL API CALL — uncomment when api/pin.js is deployed:
     const res=await fetch('/api/pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cidMeta:cm,cidMedia:cv,name:title})});
     const data=await res.json();
     if(!data.success)throw new Error('Pin failed');
-    */
-    await new Promise(r=>setTimeout(r,800)); // remove this line when real API is wired
     markPinned(i,title,total);
   }catch(e){
     btn.textContent='Pin free';btn.style.opacity='1';btn.disabled=false;
