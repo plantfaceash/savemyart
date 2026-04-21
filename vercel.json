@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "buildCommand": "",
+  "outputDirectory": ".",
+  "functions": {
+    "api/scan.js": {
+      "maxDuration": 30
+    },
+    "api/pin.js": {
+      "maxDuration": 30
+    }
+  }
+}

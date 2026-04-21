@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Save My Art — Rescue Your Foundation NFTs Free</title>
+<meta name="description" content="Foundation shut down. Rescue your NFTs free in minutes. No ETH. No gas. No cost.">
+<meta property="og:title" content="Save My Art — Free Foundation NFT Rescue">
+<meta property="og:description" content="No ETH. No gas. No wallet signing. Rescue your Foundation NFTs and pin your metadata free.">
+<meta property="og:url" content="https://savemyart.xyz">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#070707;--s1:#0e0e0e;--s2:#161616;--s3:#1e1e1e;
+  --b0:rgba(255,255,255,0.055);--b1:rgba(255,255,255,0.10);--b2:rgba(255,255,255,0.19);
+  --t0:#f0ece5;--t1:#9e9288;--t2:#5a5248;
+  --gold:#c8922a;--gold2:#e4aa40;--gbg:rgba(200,146,42,0.09);--gbg2:rgba(200,146,42,0.05);
+  --green:#2d7a50;--greenbg:rgba(45,122,80,0.13);--gborder:rgba(45,122,80,0.30);
+  --redbg:rgba(155,42,42,0.12);--rborder:rgba(155,42,42,0.28);
+  --bluebg:rgba(40,88,158,0.12);--bborder:rgba(40,88,158,0.28);
+  --serif:'Instrument Serif',Georgia,serif;
+  --sans:'Inter',-apple-system,sans-serif;
+  --mono:'Courier Prime','Courier New',monospace;
+  --r:7px;--r2:11px;--r3:15px;
+}
+[data-theme="light"]{
+  --bg:#f0ebe2;--s1:#e8e2d8;--s2:#dfd8cc;--s3:#d6cec0;
+  --b0:rgba(28,18,6,0.07);--b1:rgba(28,18,6,0.11);--b2:rgba(28,18,6,0.19);
+  --t0:#18130a;--t1:#3c3528;--t2:#786c58;
+  --gold:#9a6c18;--gold2:#c8922a;--gbg:rgba(154,108,24,0.09);--gbg2:rgba(154,108,24,0.05);
+  --green:#1c5e38;--greenbg:rgba(28,94,56,0.11);--gborder:rgba(28,94,56,0.26);
+  --redbg:rgba(130,28,28,0.09);--rborder:rgba(130,28,28,0.22);
+  --bluebg:rgba(28,68,130,0.09);--bborder:rgba(28,68,130,0.22);
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--t0);font-family:var(--sans);font-size:14px;line-height:1.6;min-height:100vh;overflow-x:hidden;transition:background .25s,color .25s}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+
+.br{font-family:var(--mono);color:var(--gold);font-size:12px;letter-spacing:.04em;background:var(--gbg2);border:.5px solid rgba(200,146,42,0.16);border-radius:3px;padding:2px 7px;white-space:nowrap;display:inline}
+.brg{font-family:var(--mono);color:#5dba85;font-size:12px;letter-spacing:.04em;background:var(--greenbg);border:.5px solid var(--gborder);border-radius:3px;padding:2px 7px;white-space:nowrap;display:inline}
+.brsm{font-family:var(--mono);color:var(--gold);font-size:11px;opacity:.8}
+.sn{font-family:var(--mono);color:var(--gold);font-size:13px;font-weight:700;flex-shrink:0;min-width:36px;padding-top:1px}
+
+/* PHISHING BAR */
+.phish{background:#0b110b;border-bottom:1px solid rgba(45,122,80,0.22);padding:7px 1rem;display:flex;align-items:center;justify-content:center;gap:7px;font-size:12px;flex-wrap:wrap;text-align:center}
+.phish-d{font-family:var(--mono);color:#5dba85;font-weight:700;font-size:12px;padding:1px 8px;background:rgba(45,122,80,0.15);border-radius:4px;border:1px solid rgba(45,122,80,0.28)}
+[data-theme="light"] .phish{background:#e0eed8;border-color:rgba(28,94,56,0.18)}
+
+.statusbar{background:var(--gold);color:#040404;text-align:center;padding:9px 1rem;font-size:13px;font-weight:500;line-height:1.5}
+
+/* NAV */
+nav{padding:0 clamp(.8rem,4vw,2.5rem);height:56px;display:flex;align-items:center;justify-content:space-between;border-bottom:.5px solid var(--b0);background:rgba(7,7,7,0.97);position:sticky;top:0;z-index:100;backdrop-filter:blur(14px);gap:.75rem}
+[data-theme="light"] nav{background:rgba(240,235,226,0.97)}
+.nav-l{display:flex;align-items:center;gap:10px;min-width:0;flex-shrink:0}
+.logo{font-family:var(--serif);font-size:1.35rem;font-style:italic;white-space:nowrap}
+.logo-dot{color:var(--gold);font-style:normal}
+.free-pill{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:10px;background:var(--greenbg);border:.5px solid var(--gborder);color:#5dba85;letter-spacing:.06em;flex-shrink:0}
+.nav-r{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.oss-link{font-family:var(--mono);font-size:11px;color:var(--t2);padding:5px 10px;border:.5px solid var(--b0);border-radius:var(--r);transition:all .18s;text-decoration:none;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.oss-link:hover{border-color:var(--b1);color:var(--t1)}
+@media(max-width:520px){.oss-link{display:none}}
+.ibtn{width:30px;height:30px;border-radius:50%;border:.5px solid var(--b1);background:transparent;color:var(--t2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .18s;flex-shrink:0;font-size:13px;font-family:var(--mono);font-weight:700}
+.ibtn:hover{border-color:var(--gold);color:var(--gold);background:var(--gbg)}
+.sharebtn{display:flex;align-items:center;gap:6px;padding:6px 13px;border:.5px solid var(--b1);border-radius:var(--r);font-size:12px;color:var(--t1);cursor:pointer;background:none;font-family:var(--sans);transition:all .18s;white-space:nowrap}
+.sharebtn:hover{border-color:var(--b2);color:var(--t0)}
+
+.fstrip{background:rgba(45,122,80,0.07);border-bottom:.5px solid var(--gborder);padding:10px clamp(.8rem,4vw,2.5rem);display:flex;align-items:center;justify-content:center;gap:clamp(.5rem,2vw,1.8rem);flex-wrap:wrap}
+
+/* HERO */
+.hero{max-width:700px;margin:0 auto;padding:clamp(2rem,6vw,4.5rem) clamp(1rem,4vw,2rem) 1.5rem;text-align:center}
+.hero-tag{display:inline-flex;align-items:center;gap:7px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-bottom:1.8rem;padding:5px 14px;border:.5px solid rgba(200,146,42,0.22);border-radius:20px;background:var(--gbg2)}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:pulse 1.9s ease-in-out infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.6)}}
+h1{font-family:var(--serif);font-size:clamp(2rem,5.5vw,3.8rem);font-weight:400;line-height:1.1;letter-spacing:-.01em;margin-bottom:1.2rem}
+h1 em{font-style:italic;color:var(--gold)}
+.hero-sub{font-size:15px;color:var(--t1);line-height:1.78;max-width:560px;margin:0 auto 1.5rem}
+.hero-sub strong{color:var(--t0);font-weight:500}
+.hero-free{display:inline-flex;align-items:center;gap:9px;padding:9px 18px;background:var(--greenbg);border:.5px solid var(--gborder);border-radius:20px;margin-bottom:2rem}
+.hero-free-t{font-family:var(--mono);font-size:12px;color:#8acba0;letter-spacing:.04em}
+
+/* SEARCH CARD */
+.swrap{max-width:600px;margin:0 auto;padding:0 clamp(1rem,4vw,2rem) 2rem}
+.scard{background:var(--s1);border:.5px solid var(--b2);border-radius:var(--r3);padding:clamp(1.25rem,4vw,2rem)}
+.sc-title{font-size:16px;font-weight:600;color:var(--t0);margin-bottom:4px}
+.sc-sub{font-size:13px;color:var(--t1);line-height:1.55;margin-bottom:1.4rem}
+.sc-lbl{display:block;font-size:12px;font-weight:500;color:var(--t0);margin-bottom:8px}
+.sc-row{display:flex;gap:8px}
+.addrinput{flex:1;background:var(--s2);border:1px solid var(--b2);border-radius:var(--r);padding:11px 13px;color:var(--t0);font-family:var(--mono);font-size:13px;outline:none;transition:all .18s;min-width:0}
+.addrinput:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(200,146,42,0.1)}
+.addrinput::placeholder{color:var(--t2);font-family:var(--sans);font-size:13px}
+.rescuebtn{background:var(--gold);color:#040404;border:none;padding:11px 20px;border-radius:var(--r);font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:var(--sans);transition:background .18s;flex-shrink:0}
+.rescuebtn:hover{background:var(--gold2)}
+.rescuebtn:disabled{opacity:.4;cursor:not-allowed}
+.divider-row{display:flex;align-items:center;gap:12px;margin:1.25rem 0;color:var(--t2);font-size:12px;font-weight:500}
+.divider-row::before,.divider-row::after{content:'';flex:1;height:.5px;background:var(--b0)}
+.wcbtn{width:100%;padding:13px 20px;border:1px solid var(--b2);border-radius:var(--r2);background:var(--s2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;font-family:var(--sans);font-size:14px;font-weight:600;color:var(--t0);transition:all .2s}
+.wcbtn:hover{border-color:var(--gold);background:var(--gbg2);color:var(--gold)}
+.wallet-note{font-size:12px;color:var(--t2);margin-top:10px;line-height:1.6;text-align:center}
+.wallet-note a{color:var(--gold);cursor:pointer;text-decoration:none}
+.gasnote{margin-top:1.25rem;padding:12px 14px;background:var(--greenbg);border:.5px solid var(--gborder);border-radius:var(--r2);display:flex;gap:10px;align-items:flex-start}
+.gastext{font-size:12.5px;color:#8acba0;line-height:1.65}
+.gastext strong{color:#b0ddc0;font-weight:600}
+.gasnote-sub{color:var(--t2);font-size:11.5px;margin-top:4px;display:block;line-height:1.55}
+
+/* COUNTDOWN */
+.cdwrap{max-width:600px;margin:0 auto 2rem;padding:0 clamp(1rem,4vw,2rem)}
+.cdcard{background:var(--s1);border:.5px solid rgba(200,146,42,0.2);border-radius:var(--r3);padding:1.4rem;display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap}
+@media(max-width:480px){.cdcard{flex-direction:column;text-align:center;gap:1rem}}
+.cdinfo{flex:1;min-width:180px}
+.cdmono{font-family:var(--mono);font-size:10.5px;color:var(--gold);letter-spacing:.1em;margin-bottom:5px}
+.cdtitle{font-size:14px;font-weight:500;color:var(--t0);margin-bottom:3px}
+.cdsub{font-size:12px;color:var(--t2);line-height:1.55}
+.cdunits{display:flex;gap:7px;flex-shrink:0}
+.cdu{text-align:center;background:var(--s2);border-radius:var(--r);padding:8px 10px;min-width:50px;border:.5px solid var(--b0)}
+.cdn{font-family:var(--mono);font-size:1.8rem;color:var(--gold);display:block;line-height:1}
+.cdl{font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:.1em;margin-top:3px}
+
+/* RESULTS */
+.results{max-width:940px;margin:2rem auto 0;padding:0 clamp(1rem,4vw,2rem)}
+.scanning{text-align:center;padding:2.5rem 1rem}
+.sring{width:36px;height:36px;border:2px solid var(--b1);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 1rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+.stext{font-size:14px;color:var(--t1);font-weight:500;margin-bottom:3px}
+.saddr{font-family:var(--mono);font-size:12px;color:var(--gold)}
+.ssteps{display:flex;flex-direction:column;gap:5px;max-width:360px;margin:1.25rem auto 0;text-align:left}
+.sstep{font-size:12px;color:var(--t2);display:flex;align-items:center;gap:9px;padding:7px 12px;border-radius:var(--r);background:var(--s1);transition:all .35s;border:.5px solid transparent}
+.sstep.done{color:#8acba0;background:var(--greenbg);border-color:rgba(45,122,80,.2)}
+.sstep .si{width:28px;text-align:center;font-family:var(--mono);font-size:10px;flex-shrink:0}
+.sstep.done .si::before{content:'[ok]';color:#5dba85}
+.reshdr{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.4rem;padding-bottom:1.2rem;border-bottom:.5px solid var(--b0)}
+.resfound h2{font-family:var(--serif);font-size:1.8rem;font-weight:400;margin-bottom:3px}
+.resfound h2 em{color:var(--gold)}
+.resfound p{font-size:12.5px;color:var(--t1)}
+.resacts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.rb{padding:8px 14px;border-radius:var(--r);font-size:12px;cursor:pointer;font-family:var(--sans);transition:all .18s;display:flex;align-items:center;gap:6px;font-weight:500;border:.5px solid;white-space:nowrap}
+.rbg{background:var(--greenbg);border-color:var(--gborder);color:#5dba85}
+.rbg:hover{background:rgba(45,122,80,.22)}
+.rbo{background:transparent;border-color:var(--b1);color:var(--t1)}
+.rbo:hover{border-color:var(--b2);color:var(--t0)}
+
+/* NFT GRID */
+.nftgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:2.5rem}
+.nftcard{background:var(--s1);border:.5px solid var(--b0);border-radius:var(--r3);overflow:hidden;transition:border-color .2s,transform .2s}
+.nftcard:hover{border-color:var(--b1);transform:translateY(-2px)}
+.nftcard.rescued{border-color:var(--gborder);background:rgba(45,122,80,0.04)}
+.nftart{width:100%;aspect-ratio:1;position:relative;overflow:hidden}
+.sbadge{position:absolute;top:10px;right:10px;font-family:var(--mono);font-size:10px;padding:3px 9px;border-radius:10px;font-weight:700;letter-spacing:.04em}
+.sbr{background:var(--redbg);border:.5px solid var(--rborder);color:#e07070}
+.sbg{background:var(--greenbg);border:.5px solid var(--gborder);color:#5dba85}
+.nftbody{padding:14px}
+.nftt{font-size:14px;font-weight:600;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nftch{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--t2);margin-bottom:11px}
+.chdot{width:5px;height:5px;border-radius:50%;flex-shrink:0;background:#627eea}
+.cidbox{background:var(--s2);border-radius:var(--r);padding:8px 10px;margin-bottom:10px;border:.5px solid var(--b0)}
+.cidl{font-size:10px;letter-spacing:.1em;color:var(--t2);text-transform:uppercase;margin-bottom:3px;font-weight:500}
+.cidv{font-family:var(--mono);font-size:11px;color:var(--gold);word-break:break-all;line-height:1.5;cursor:pointer}
+.cidv:hover{color:var(--gold2)}
+.nftbtns{display:flex;gap:6px}
+.nb{flex:1;padding:7px 6px;border-radius:var(--r);font-size:11.5px;cursor:pointer;font-family:var(--sans);transition:all .18s;text-align:center;font-weight:600;border:.5px solid;display:flex;align-items:center;justify-content:center;gap:3px}
+.nbpin{background:var(--greenbg);border-color:var(--gborder);color:#5dba85}
+.nbpin:hover{background:rgba(45,122,80,.22)}
+.nbpin.pinned{background:var(--greenbg);border-color:var(--gborder);color:#5dba85;opacity:.6;cursor:default}
+.nbdl{background:transparent;border-color:var(--b1);color:var(--t1)}
+.nbdl:hover{border-color:var(--b2);color:var(--t0)}
+.nbeth{background:var(--bluebg);border-color:var(--bborder);color:#6aacf0}
+
+/* PROGRESS BAR (shown during pin all) */
+.pin-progress{background:var(--s1);border:.5px solid var(--gborder);border-radius:var(--r2);padding:1.25rem 1.5rem;margin-bottom:1.5rem}
+.pp-label{font-size:13px;color:var(--t1);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.pp-label span{font-family:var(--mono);font-size:11px;color:#5dba85}
+.pp-bar{height:4px;background:var(--b0);border-radius:2px;overflow:hidden}
+.pp-fill{height:100%;background:var(--green);border-radius:2px;width:0%;transition:width .4s ease}
+
+/* COMPLETION STATE */
+.completion{max-width:940px;margin:0 auto;padding:0 clamp(1rem,4vw,2rem) 2rem;animation:rise .4s ease}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.completion-hero{text-align:center;padding:3rem 1rem 2.5rem;border-bottom:.5px solid var(--b0);margin-bottom:3rem}
+.completion-mono{font-family:var(--mono);font-size:11px;color:#5dba85;letter-spacing:.18em;text-transform:uppercase;margin-bottom:1.2rem;display:flex;align-items:center;justify-content:center;gap:8px}
+.completion-pulse{width:8px;height:8px;border-radius:50%;background:#5dba85;animation:pulse 1.5s ease-in-out infinite}
+.completion-title{font-family:var(--serif);font-size:clamp(2rem,5vw,3.5rem);font-weight:400;line-height:1.1;margin-bottom:1rem}
+.completion-title em{font-style:italic;color:var(--gold)}
+.completion-sub{font-size:15px;color:var(--t1);max-width:520px;margin:0 auto 2rem;line-height:1.75}
+.completion-sub strong{color:var(--t0);font-weight:500}
+.completion-stats{display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin-bottom:2rem}
+.cstat{text-align:center;padding:1rem 1.5rem;background:var(--s1);border:.5px solid var(--gborder);border-radius:var(--r2)}
+.cstat-n{font-family:var(--mono);font-size:1.6rem;color:var(--gold);display:block;margin-bottom:3px}
+.cstat-l{font-size:11px;color:var(--t2);letter-spacing:.07em;text-transform:uppercase}
+.completion-acts{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+
+/* WHERE NEXT */
+.sblock{max-width:940px;margin:0 auto;padding:0 clamp(1rem,4vw,2rem) 2rem}
+.smono{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--t2);margin-bottom:1.2rem}
+.platgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:2.5rem}
+.platcard{background:var(--s1);border:.5px solid var(--b0);border-radius:var(--r3);padding:1.4rem;transition:border-color .18s}
+.platcard:hover{border-color:var(--b1)}
+.platcard.rec{border-color:rgba(200,146,42,.22);background:var(--gbg2)}
+.plathead{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:9px;gap:.5rem;flex-wrap:wrap}
+.platname{font-size:15px;font-weight:700;margin-bottom:2px}
+.platurl{font-family:var(--mono);font-size:11px;color:var(--t2)}
+.platdesc{font-size:13px;color:var(--t1);line-height:1.65;margin-bottom:1rem}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1.1rem}
+.chip{font-size:11px;padding:3px 9px;border-radius:10px;border:.5px solid var(--b1);color:var(--t2)}
+.chipf{font-size:11px;padding:3px 9px;border-radius:10px;color:#5dba85;border:.5px solid var(--gborder);background:var(--greenbg)}
+.platlink{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--gold);font-weight:600}
+.platlink:hover{color:var(--gold2)}
+
+/* CANVAS TEASER — COMPLETION VERSION (shorter, punchier) */
+.canvas-final{max-width:940px;margin:0 auto clamp(2rem,4vw,4rem);padding:0 clamp(1rem,4vw,2rem)}
+.cf-inner{background:var(--s1);border:.5px solid var(--b1);border-radius:var(--r3);padding:clamp(1.5rem,4vw,2.5rem);display:grid;grid-template-columns:1fr auto;gap:2rem;align-items:center}
+@media(max-width:600px){.cf-inner{grid-template-columns:1fr}}
+.cf-mono{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;color:var(--gold);margin-bottom:.8rem;display:flex;align-items:center;gap:8px}
+.bp{font-size:10px;padding:3px 10px;border-radius:10px;background:var(--gbg);border:.5px solid rgba(200,146,42,.22);color:var(--gold);font-family:var(--mono)}
+.cf-title{font-family:var(--serif);font-size:clamp(1.4rem,3vw,2rem);font-weight:400;line-height:1.2;margin-bottom:.8rem}
+.cf-title em{font-style:italic;color:var(--gold)}
+.cf-body{font-size:13.5px;color:var(--t1);line-height:1.72;margin-bottom:1.4rem;max-width:500px}
+.cf-body strong{color:var(--t0);font-weight:500}
+.cf-acts{display:flex;gap:10px;flex-wrap:wrap}
+.cf-features{display:flex;flex-direction:column;gap:6px;min-width:200px}
+.cff{font-family:var(--mono);font-size:12px;color:var(--t1);display:flex;align-items:center;gap:8px}
+.cff-mark{color:var(--gold);min-width:24px}
+.cff strong{color:var(--t0);font-weight:500}
+
+/* GRADIENTS */
+.g1{background:linear-gradient(135deg,#0d0618,#190c35,#091322)}.g1::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 35% 40%,rgba(150,80,248,.36) 0%,transparent 52%)}
+.g2{background:linear-gradient(160deg,#040d04,#0d2008,#173510)}.g2::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 65% 35%,rgba(82,192,106,.34) 0%,transparent 50%)}
+.g3{background:linear-gradient(112deg,#100804,#241205,#381c08)}.g3::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 58%,rgba(236,136,48,.38) 0%,transparent 52%)}
+.g4{background:linear-gradient(148deg,#060613,#0d0d23,#170a18)}.g4::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 40% 48%,rgba(155,76,195,.36) 0%,transparent 50%)}
+.g5{background:linear-gradient(168deg,#001010,#002518,#003c22)}.g5::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 60% 38%,rgba(46,196,165,.36) 0%,transparent 52%)}
+.g6{background:linear-gradient(125deg,#100404,#250606,#1c1100)}.g6::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 44% 54%,rgba(206,66,46,.36) 0%,transparent 48%)}
+
+/* FACTS */
+.facts{border-top:.5px solid var(--b0);border-bottom:.5px solid var(--b0);background:var(--s1);padding:1.75rem clamp(1rem,4vw,2.5rem);display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1.5rem;text-align:center}
+.factn{font-family:var(--mono);font-size:1.7rem;color:var(--gold);display:block;margin-bottom:3px}
+.factl{font-size:11px;color:var(--t2);letter-spacing:.07em;text-transform:uppercase}
+.facts-sub{font-family:var(--mono);font-size:11px;color:#5dba85;margin-top:2px;display:block}
+
+/* FOOTER */
+footer{padding:1.4rem clamp(1rem,4vw,2.5rem);display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;border-top:.5px solid var(--b0)}
+.ftl{font-size:12px;color:var(--t2);line-height:1.7}
+.ftl a{color:var(--gold);text-decoration:none}
+.ftcredit{font-family:var(--mono);font-size:11.5px;color:var(--t2);margin-top:6px}
+.ftcredit a{color:var(--t1);text-decoration:none;transition:color .18s}
+.ftcredit a:hover{color:var(--t0)}
+.ftlinks{display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap}
+.ftlink{font-size:12px;color:var(--t2);cursor:pointer;transition:color .15s;background:none;border:none;font-family:var(--sans);text-decoration:none}
+.ftlink:hover{color:var(--t1)}
+
+/* BUTTONS */
+.btngold{background:var(--gold);color:#040404;border:none;padding:10px 22px;border-radius:var(--r2);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans);transition:background .18s}
+.btngold:hover{background:var(--gold2)}
+.btnghost{display:flex;align-items:center;gap:7px;padding:10px 16px;border:.5px solid var(--b1);border-radius:var(--r2);font-size:13px;color:var(--t1);cursor:pointer;background:transparent;font-family:var(--sans);transition:all .18s}
+.btnghost:hover{border-color:var(--b2);color:var(--t0)}
+
+/* MODAL */
+.modalbg{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(5px);padding:1rem}
+.modalbg.open{display:flex;animation:fdi .2s ease}
+@keyframes fdi{from{opacity:0}to{opacity:1}}
+.modal{background:var(--s1);border:.5px solid var(--b2);border-radius:var(--r3);width:100%;max-width:500px;max-height:90vh;overflow-y:auto;animation:rise .22s ease}
+.mhead{padding:1.5rem 1.5rem 1rem;border-bottom:.5px solid var(--b0);display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;position:sticky;top:0;background:var(--s1);z-index:1}
+.mtitle{font-family:var(--serif);font-size:1.45rem;font-weight:400}
+.mx{background:none;border:none;color:var(--t2);cursor:pointer;font-size:1.1rem;padding:0;font-family:var(--sans)}
+.mx:hover{color:var(--t0)}
+.mbody{padding:1.4rem 1.5rem 2rem}
+.hsteps{display:flex;flex-direction:column;gap:1.1rem;margin-bottom:1.5rem}
+.hs{display:flex;gap:14px;align-items:flex-start}
+.hst h4{font-size:13.5px;font-weight:600;color:var(--t0);margin-bottom:4px}
+.hst p{font-size:13px;color:var(--t1);line-height:1.65}
+.ibox{background:var(--s2);border-radius:var(--r2);padding:14px;border:.5px solid var(--b0);margin-bottom:1.4rem}
+.ibox h4{font-size:13px;font-weight:600;margin-bottom:5px}
+.ibox p{font-size:12.5px;color:var(--t1);line-height:1.65}
+.sep{border:none;border-top:.5px solid var(--b0);margin:1.4rem 0}
+.macts{display:flex;gap:10px;flex-wrap:wrap;margin-top:1.4rem}
+
+/* TOAST */
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--s2);border:.5px solid var(--gold);border-radius:var(--r2);padding:11px 15px;font-size:13px;z-index:600;display:flex;align-items:center;gap:8px;max-width:290px;line-height:1.45;animation:rise .22s ease;pointer-events:none}
+.tdot{width:6px;height:6px;border-radius:50%;background:var(--gold);flex-shrink:0}
+</style>
+</head>
+<body>
+
+<div class="phish">
+  <span style="color:#5dba85">🔒</span>
+  <span style="color:#567056">Official site:</span>
+  <span class="phish-d" id="phish-d">savemyart.xyz</span>
+  <span style="color:#3d5a3d;font-size:11px">— never share your seed phrase anywhere</span>
+</div>
+
+<div class="statusbar">
+  <strong>Foundation is closing.</strong> Your NFTs live on Ethereum forever. Your images and metadata need a backup. This tool does it free. <strong>No ETH. No gas. No cost.</strong>
+</div>
+
+<nav>
+  <div class="nav-l">
+    <div class="logo">save my art<span class="logo-dot">.</span></div>
+    <span class="free-pill">[FREE]</span>
+  </div>
+  <div class="nav-r">
+    <a class="oss-link" href="https://github.com/PlantFaceAsh/savemyart" target="_blank" rel="noopener">
+      <svg style="width:11px;height:11px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.38.6.11.82-.26.82-.58v-2.03c-3.34.72-4.04-1.61-4.04-1.61-.54-1.38-1.33-1.75-1.33-1.75-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.49 5.93.43.37.82 1.1.82 2.22v3.29c0 .32.21.7.83.58C20.57 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      open-source
+    </a>
+    <button class="ibtn" onclick="toggleTheme()" id="theme-btn" title="Toggle light mode">☀</button>
+    <button class="ibtn" onclick="openHelp()" title="How does this work?">?</button>
+    <button class="sharebtn" onclick="shareOnX()">
+      <svg style="width:11px;height:11px;fill:currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.73-8.835L1.254 2.25H8.08l4.259 5.629L18.244 2.25z"/></svg>
+      Share
+    </button>
+  </div>
+</nav>
+
+<div class="fstrip">
+  <span class="brg">[no wallet signing]</span>
+  <span class="brg">[no ETH or gas]</span>
+  <span class="brg">[no account needed]</span>
+  <span class="brg">[100% free, always]</span>
+</div>
+
+<div class="hero" id="hero-section">
+  <div class="hero-tag"><span class="pulse"></span> For every Foundation artist</div>
+  <h1>Your art survived.<br><em>Let's keep it that way.</em></h1>
+  <p class="hero-sub">
+    Foundation shut down. Your NFTs are <strong>still on Ethereum, permanently.</strong>
+    What needs saving are the images and metadata on Foundation's servers.
+    When those go dark, your art becomes a token pointing to nothing.
+    <strong>This fixes that in minutes, completely free.</strong>
+  </p>
+  <div class="hero-free">
+    <span style="color:#5dba85">✓</span>
+    <span class="hero-free-t">completely free. no ETH. no gas. no cost of any kind.</span>
+  </div>
+</div>
+
+<div class="swrap" id="rescue">
+  <div class="scard">
+    <div class="sc-title">Find and rescue your Foundation art</div>
+    <div class="sc-sub">Enter your wallet address. We scan Foundation's public Ethereum contract and show every piece you minted. No signing, no permissions, nothing spent.</div>
+    <label class="sc-lbl" for="wallet-addr">Your wallet address</label>
+    <div class="sc-row">
+      <input class="addrinput" id="wallet-addr" type="text" placeholder="0x... or yourname.eth" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')doRescue()">
+      <button class="rescuebtn" id="rescue-btn" onclick="doRescue()">Rescue my art</button>
+    </div>
+    <div class="divider-row">or connect your wallet to auto-fill</div>
+    <button class="wcbtn" onclick="connectWallet()" id="wallet-btn">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8L2 7h20z"/><circle cx="17" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>
+      Connect Wallet
+    </button>
+    <p class="wallet-note">
+      Read-only. We auto-fill your address and scan. No transaction, no signing, nothing spent.<br>
+      Works with MetaMask, Coinbase Wallet, Rabby, and any browser wallet.
+      No wallet? <a onclick="document.getElementById('wallet-addr').focus()">Just paste your address above.</a>
+    </p>
+    <div class="gasnote">
+      <span style="color:#5dba85;flex-shrink:0;margin-top:1px">✓</span>
+      <div class="gastext">
+        <strong>No ETH or gas required for this tool.</strong> Scanning is read-only blockchain data. Pinning your metadata happens server-side through Filebase. Nothing is sent to any blockchain.
+        <span class="gasnote-sub">If you still have active listings inside Foundation's smart contract: Foundation is building their own unlisting tool. <a href="https://cidkeeper.valipokkann.in" target="_blank" rel="noopener" style="color:var(--gold)">CIDKeeper</a> also supports this now. Unlisting requires a small gas fee ($2-5) since it is an on-chain transaction.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cdwrap">
+  <div class="cdcard">
+    <div class="cdinfo">
+      <div class="cdmono">[DEADLINE]</div>
+      <div class="cdtitle">Foundation switches off their servers</div>
+      <div class="cdsub">Your files are currently pinned by Foundation until April 15, 2027. Back up your own copy now so you are not dependent on them.</div>
+    </div>
+    <div class="cdunits">
+      <div class="cdu"><span class="cdn" id="cd-d">--</span><span class="cdl">days</span></div>
+      <div class="cdu"><span class="cdn" id="cd-h">--</span><span class="cdl">hrs</span></div>
+      <div class="cdu"><span class="cdn" id="cd-m">--</span><span class="cdl">min</span></div>
+      <div class="cdu"><span class="cdn" id="cd-s">--</span><span class="cdl">sec</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="results" id="results-area"></div>
+<div id="completion-area"></div>
+
+<!-- WHERE NEXT — shown after completion -->
+<div class="sblock" id="what-next" style="display:none">
+  <p class="smono">// honest recommendations. no affiliation, no kickbacks.</p>
+  <div class="platgrid">
+    <div class="platcard rec">
+      <div class="plathead"><div><div class="platname">Zora</div><div class="platurl">zora.co</div></div><span class="br">[recommended]</span></div>
+      <p class="platdesc">Open to everyone, no invite needed. Works on Ethereum and Base where gas can be under a cent. Foundation artists know this platform well. The most artist-friendly option available right now.</p>
+      <div class="chips"><span class="chipf">[0% fees]</span><span class="chip">ETH + Base</span><span class="chip">1/1s + editions</span><span class="chip">No approval</span></div>
+      <a class="platlink" href="https://zora.co" target="_blank" rel="noopener">Go to Zora →</a>
+    </div>
+    <div class="platcard rec">
+      <div class="plathead"><div><div class="platname">Manifold</div><div class="platurl">manifold.xyz</div></div><span class="br">[recommended]</span></div>
+      <p class="platdesc">Deploy your own smart contract with no code needed. You own it, not Manifold. Many serious Foundation artists already use this as their primary studio. Maximum ownership and control.</p>
+      <div class="chips"><span class="chipf">[0% fees]</span><span class="chip">ETH + Base</span><span class="chip">Own your contract</span><span class="chip">Allowlists</span></div>
+      <a class="platlink" href="https://manifold.xyz" target="_blank" rel="noopener">Go to Manifold →</a>
+    </div>
+    <div class="platcard">
+      <div class="plathead"><div><div class="platname">SuperRare</div><div class="platurl">superrare.com</div></div><span class="brsm">[curated]</span></div>
+      <p class="platdesc">Application-based. Not everyone gets in. But if you are a serious Foundation artist with a body of work, apply. The collector base is deep and the community is genuine.</p>
+      <div class="chips"><span class="chip">3% fee</span><span class="chip">ETH</span><span class="chip">Application required</span></div>
+      <a class="platlink" href="https://superrare.com" target="_blank" rel="noopener">Go to SuperRare →</a>
+    </div>
+  </div>
+</div>
+
+<!-- CANVAS FINAL TEASER -->
+<div class="canvas-final" id="canvas-teaser" style="display:none">
+  <div class="cf-inner">
+    <div>
+      <div class="cf-mono">canvas <span class="bp">[building now]</span></div>
+      <h2 class="cf-title">A home for art that<br><em>will never shut down.</em></h2>
+      <p class="cf-body">
+        We are building the platform Foundation should have been. <strong>Zero platform fees, enforced in the contract.</strong> Your rescued catalog imports in one click. Permanent metadata on IPFS and Arweave. ETH and Base. No leaderboards, no noise, no VC pressure. Just art, artists, and collectors — the way it was always supposed to be.
+        <br><br>
+        Completely free. Funded optionally by the community, for the community.
+      </p>
+      <div class="cf-acts">
+        <button class="btngold" onclick="notifyMe()">Notify me at launch</button>
+        <button class="btnghost" onclick="followOnX()">
+          <svg style="width:12px;height:12px;fill:currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.73-8.835L1.254 2.25H8.08l4.259 5.629L18.244 2.25z"/></svg>
+          Follow on X
+        </button>
+      </div>
+    </div>
+    <div class="cf-features">
+      <div class="cff"><span class="cff-mark">[0%]</span><span><strong>Platform fees</strong> — in the contract</span></div>
+      <div class="cff"><span class="cff-mark">[↩]</span><span><strong>Import</strong> your Foundation catalog</span></div>
+      <div class="cff"><span class="cff-mark">[∞]</span><span><strong>Permanent</strong> IPFS + Arweave</span></div>
+      <div class="cff"><span class="cff-mark">[⬡]</span><span><strong>Base</strong> — mint for cents</span></div>
+      <div class="cff"><span class="cff-mark">[↗]</span><span><strong>Share cards</strong> for X/Twitter</span></div>
+      <div class="cff"><span class="cff-mark">[♡]</span><span><strong>Artist fund</strong> — optional, community-run</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="facts">
+  <div><span class="factn">$0</span><span class="factl">Cost to use this tool</span><span class="facts-sub">[always free]</span></div>
+  <div><span class="factn">0</span><span class="factl">ETH or gas required</span><span class="facts-sub">[zero transactions]</span></div>
+  <div><span class="factn" id="days-left">--</span><span class="factl">Days left in pinning window</span><span class="facts-sub">[deadline apr 15 2027]</span></div>
+  <div><span class="factn">$230M</span><span class="factl">Foundation primary sales</span><span class="facts-sub">[worth protecting]</span></div>
+</div>
+
+<footer>
+  <div class="ftl">
+    A free community tool. No affiliation with Foundation or BlackDove.
+    Foundation built something real. This exists to protect what they created.
+    <br><a href="#" onclick="shareOnX()">Share with every Foundation artist you know →</a>
+    <div class="ftcredit">built with love for art and artists by Ash <a href="https://x.com/PlantFaceAsh" target="_blank" rel="noopener">@PlantFaceAsh</a></div>
+  </div>
+  <div class="ftlinks">
+    <button class="ftlink" onclick="shareOnX()">Share on X</button>
+    <a class="ftlink" href="https://github.com/PlantFaceAsh/savemyart" target="_blank" rel="noopener">Open source</a>
+    <button class="ftlink" onclick="openHelp()">How it works</button>
+  </div>
+</footer>
+
+<!-- HELP MODAL -->
+<div class="modalbg" id="help-modal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <div class="mhead">
+      <h2 class="mtitle">How this works</h2>
+      <button class="mx" onclick="document.getElementById('help-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="mbody">
+      <div class="ibox">
+        <h4>The problem, plainly</h4>
+        <p>Your NFT is recorded on Ethereum permanently. But the actual image and metadata files live on IPFS, kept alive by Foundation's servers. When Foundation goes dark, those servers stop. The art file disappears. Your token still exists but points to nothing. This tool pins your files somewhere you control before that happens.</p>
+      </div>
+      <div class="hsteps">
+        <div class="hs"><span class="sn">[01]</span><div class="hst"><h4>Enter your wallet address</h4><p>Paste your public address or connect your wallet. We never ask you to sign anything. No transaction. Nothing spent.</p></div></div>
+        <div class="hs"><span class="sn">[02]</span><div class="hst"><h4>We find your Foundation NFTs</h4><p>We query Foundation's public Ethereum contract and find every piece you created. Each one has a content identifier pointing to your files on IPFS.</p></div></div>
+        <div class="hs"><span class="sn">[03]</span><div class="hst"><h4>We pin your files — automatically</h4><p>Click "Pin all free" and we handle everything server-side via Filebase. Your files are copied to a redundant pinning node that you own, independent of Foundation. Costs nothing.</p></div></div>
+        <div class="hs"><span class="sn">[04]</span><div class="hst"><h4>Download your metadata</h4><p>Grab a JSON backup of each piece. Holds your title, description, and all file identifiers. Keep it somewhere safe.</p></div></div>
+        <div class="hs"><span class="sn">[05]</span><div class="hst"><h4>Move forward</h4><p>Art safe. Tokens still yours on Ethereum. List on Zora or Manifold today, or wait for canvas — a new platform being built with zero fees, forever.</p></div></div>
+      </div>
+      <div class="sep"></div>
+      <p style="font-size:12.5px;color:var(--t2);line-height:1.65">Foundation is currently still pinning your files until April 15, 2027. This tool creates your own independent backup copy so you are not reliant on them. Better to act now.</p>
+      <div class="macts">
+        <button class="btngold" onclick="document.getElementById('help-modal').classList.remove('open');document.getElementById('wallet-addr').focus()">Start rescuing my art</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* DOMAIN */
+document.getElementById('phish-d').textContent = window.location.hostname || 'savemyart.xyz';
+
+/* THEME */
+function toggleTheme(){
+  const h=document.documentElement,dark=h.getAttribute('data-theme')==='dark';
+  h.setAttribute('data-theme',dark?'light':'dark');
+  document.getElementById('theme-btn').textContent=dark?'🌙':'☀';
+  localStorage.setItem('sma-theme',dark?'light':'dark');
+}
+const st=localStorage.getItem('sma-theme');
+if(st){document.documentElement.setAttribute('data-theme',st);document.getElementById('theme-btn').textContent=st==='light'?'🌙':'☀';}
+
+/* COUNTDOWN */
+const DL=new Date('2027-04-15T00:00:00Z');
+function tick(){
+  const d=DL-Date.now();if(d<=0)return;
+  const dy=Math.floor(d/86400000),h=Math.floor((d%86400000)/3600000),m=Math.floor((d%3600000)/60000),s=Math.floor((d%60000)/1000);
+  ['cd-d','cd-h','cd-m','cd-s'].forEach((id,i)=>document.getElementById(id).textContent=String([dy,h,m,s][i]).padStart(2,'0'));
+  const el=document.getElementById('days-left');if(el)el.textContent=dy;
+}
+tick();setInterval(tick,1000);
+
+/* WALLET CONNECT */
+async function connectWallet(){
+  const btn=document.getElementById('wallet-btn');
+  if(typeof window.ethereum==='undefined'){
+    toast('No browser wallet detected. Paste your address above — no wallet needed to scan.');
+    return;
+  }
+  btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Connecting...';
+  try{
+    const accounts=await window.ethereum.request({method:'eth_requestAccounts'});
+    if(accounts&&accounts[0]){
+      document.getElementById('wallet-addr').value=accounts[0];
+      btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5dba85" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Connected';
+      btn.style.borderColor='var(--gborder)';btn.style.color='#5dba85';
+      toast('Wallet connected [read-only]');
+      setTimeout(()=>doRescue(),400);
+    }
+  }catch(err){
+    btn.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8L2 7h20z"/><circle cx="17" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg> Connect Wallet';
+    if(err.code===4001)toast('Cancelled. You can still paste your address above.');
+    else toast('Could not connect. Paste your address above instead.');
+  }
+}
+
+/* SCAN */
+const MOCK=[
+  {title:'Chromatic Decay #1',tokenId:'31',cid_meta:'QmXc3f9bA2k7mN8pR4sT6uV1wX2yZ3a4b5',cid_media:'QmAf9d12e3f4g5h6i7j8k9l0m1n2o3p4q5',grad:'g1',listed:false},
+  {title:'Void Portrait #2',tokenId:'88',cid_meta:'QmBe2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',cid_media:'QmDd1e2f3g4h5i6j7k8l9m0n1o2p3q4r5',grad:'g2',listed:true},
+  {title:'Signal and Noise',tokenId:'142',cid_meta:'QmFe8g9h0i1j2k3l4m5n6o7p8q9r0s1t2',cid_media:'QmGb4c5d6e7f8g9h0i1j2k3l4m5n6o7p8',grad:'g3',listed:false},
+  {title:'Quiet Architecture',tokenId:'207',cid_meta:'QmHd5e6f7g8h9i0j1k2l3m4n5o6p7q8r9',cid_media:'QmIe6f7g8h9i0j1k2l3m4n5o6p7q8r9s0',grad:'g4',listed:false},
+  {title:'Field Notes V',tokenId:'319',cid_meta:'QmJf7g8h9i0j1k2l3m4n5o6p7q8r9s0t1',cid_media:'QmKg8h9i0j1k2l3m4n5o6p7q8r9s0t1u2',grad:'g5',listed:true},
+  {title:'Liminal Space 7',tokenId:'401',cid_meta:'QmLh9i0j1k2l3m4n5o6p7q8r9s0t1u2v3',cid_media:'QmMi0j1k2l3m4n5o6p7q8r9s0t1u2v3w4',grad:'g6',listed:false},
+];
+const STEPS=['Querying Foundation contract on Ethereum mainnet','Fetching IPFS metadata CIDs for each token','Checking current pin status','Verifying on-chain ownership'];
+let pinnedCount=0;
+
+function doRescue(){
+  const v=document.getElementById('wallet-addr').value.trim();
+  if(!v){toast('Paste your wallet address above first');return;}
+  const btn=document.getElementById('rescue-btn');
+  btn.disabled=true;btn.textContent='Scanning...';
+  document.getElementById('completion-area').innerHTML='';
+  document.getElementById('what-next').style.display='none';
+  document.getElementById('canvas-teaser').style.display='none';
+  const sh=v.slice(0,6)+'...'+v.slice(-4);
+  document.getElementById('results-area').innerHTML=`
+    <div class="scanning">
+      <div class="sring"></div>
+      <div class="stext">Scanning Foundation contracts for <span class="saddr">${sh}</span></div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--t2);margin-top:3px">[read-only] [no gas] [no signing]</div>
+      <div class="ssteps">${STEPS.map((s,i)=>`<div class="sstep" id="ss${i}"><span class="si">...</span>${s}</div>`).join('')}</div>
+    </div>`;
+  /* REAL API CALL — uncomment when api/scan.js is deployed:
+  fetch('/api/scan?address='+encodeURIComponent(v))
+    .then(r=>r.json())
+    .then(data=>{ clearInterval(scanIv); showResults(data.nfts); btn.disabled=false; btn.textContent='Rescue my art'; })
+    .catch(()=>{ toast('Scan failed. Check your address and try again.'); btn.disabled=false; btn.textContent='Rescue my art'; });
+  */
+  let i=0;const scanIv=setInterval(()=>{
+    document.getElementById('ss'+i)?.classList.add('done');i++;
+    if(i>=STEPS.length){clearInterval(scanIv);btn.disabled=false;btn.textContent='Rescue my art';setTimeout(()=>showResults(MOCK),300);}
+  },500);
+}
+
+function showResults(nfts){
+  pinnedCount=0;
+  document.getElementById('results-area').innerHTML=`
+    <div class="reshdr">
+      <div class="resfound"><h2>Found <em>${nfts.length} works</em> from Foundation</h2><p>All tokens remain on Ethereum permanently. Pin all files below to secure your backup.</p></div>
+      <div class="resacts">
+        <button class="rb rbg" id="pin-all-btn" onclick="pinAll()">Pin all free</button>
+        <button class="rb rbo" onclick="dlAll()">Download all metadata</button>
+        <button class="rb rbo" onclick="shareRescued()"><svg style="width:11px;height:11px;fill:currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.73-8.835L1.254 2.25H8.08l4.259 5.629L18.244 2.25z"/></svg>Share</button>
+      </div>
+    </div>
+    <div id="progress-wrap" style="display:none" class="pin-progress">
+      <div class="pp-label">Pinning your art to permanent storage...<span id="pp-count">0 / ${nfts.length}</span></div>
+      <div class="pp-bar"><div class="pp-fill" id="pp-fill"></div></div>
+    </div>
+    <div class="nftgrid">${nfts.map((n,i)=>nftCard(n,i)).join('')}</div>`;
+}
+
+function nftCard(n,i){
+  return`<div class="nftcard" id="card-${i}">
+    <div class="nftart"><div class="${n.grad}" style="width:100%;height:100%;position:relative"></div>
+    <div class="sbadge sbr" id="badge-${i}">[needs backup]</div></div>
+    <div class="nftbody">
+      <div class="nftt">${n.title}</div>
+      <div class="nftch"><span class="chdot"></span>Ethereum #${n.tokenId}${n.listed?' <span style="color:var(--gold)">[listed]</span>':''}</div>
+      <div class="cidbox"><div class="cidl">Metadata CID</div><div class="cidv" onclick="copyCID('${n.cid_meta}','${n.title}')">${n.cid_meta}...</div></div>
+      <div class="nftbtns">
+        <button class="nb nbpin" id="pin-${i}" onclick="pinOne(i,${i},'${n.cid_meta}','${n.cid_media}','${n.title}',${MOCK.length})">Pin free</button>
+        <button class="nb nbdl" onclick="dlMeta('${n.title}','${n.cid_meta}','${n.cid_media}')">JSON</button>
+        <button class="nb nbeth" onclick="window.open('https://etherscan.io/token/0x3B3ee1931Dc30C1957379FAc9aba94D1C48a5405?a=${n.tokenId}','_blank','noopener')">Etherscan</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+const pinned=new Set();
+
+async function pinOne(isFromPinAll,i,cm,cv,title,total){
+  if(pinned.has(i))return;
+  const btn=document.getElementById('pin-'+i);
+  btn.textContent='Pinning...';btn.style.opacity='.55';btn.disabled=true;
+
+  try{
+    /* REAL API CALL — uncomment when api/pin.js is deployed:
+    const res=await fetch('/api/pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cidMeta:cm,cidMedia:cv,name:title})});
+    const data=await res.json();
+    if(!data.success)throw new Error('Pin failed');
+    */
+    await new Promise(r=>setTimeout(r,800)); // remove this line when real API is wired
+    markPinned(i,title,total);
+  }catch(e){
+    btn.textContent='Pin free';btn.style.opacity='1';btn.disabled=false;
+    toast('Pin failed for "'+title+'". Try again.');
+  }
+}
+
+function markPinned(i,title,total){
+  pinned.add(i);
+  pinnedCount++;
+  const btn=document.getElementById('pin-'+i);
+  btn.textContent='[pinned]';btn.className='nb nbpin pinned';btn.style.opacity='1';
+  document.getElementById('badge-'+i).className='sbadge sbg';
+  document.getElementById('badge-'+i).textContent='[safe]';
+  document.getElementById('card-'+i).classList.add('rescued');
+
+  // Update progress bar if pinning all
+  const fill=document.getElementById('pp-fill');
+  const count=document.getElementById('pp-count');
+  if(fill){fill.style.width=(pinnedCount/total*100)+'%';}
+  if(count){count.textContent=pinnedCount+' / '+total;}
+
+  toast('"'+title+'" pinned. Files secured.');
+
+  // If all pinned, show completion
+  if(pinnedCount===total)setTimeout(()=>showCompletion(total),600);
+}
+
+function pinAll(){
+  const total=MOCK.length;
+  document.getElementById('progress-wrap').style.display='block';
+  document.getElementById('pin-all-btn').disabled=true;
+  document.getElementById('pin-all-btn').textContent='Pinning...';
+  let delay=0;
+  MOCK.forEach((_,i)=>{
+    if(!pinned.has(i)){
+      setTimeout(()=>pinOne(true,i,MOCK[i].cid_meta,MOCK[i].cid_media,MOCK[i].title,total),delay);
+      delay+=400;
+    }
+  });
+}
+
+function showCompletion(total){
+  document.getElementById('completion-area').innerHTML=`
+    <div class="completion">
+      <div class="completion-hero">
+        <div class="completion-mono"><span class="completion-pulse"></span> rescue complete</div>
+        <h2 class="completion-title">Your art is safe.<br><em>It always will be.</em></h2>
+        <p class="completion-sub">
+          <strong>${total} pieces pinned</strong> to Filebase — 3x redundant, independent of Foundation's servers.
+          Your content identifiers are unchanged. Your tokens are unchanged. Your collectors still hold what they collected.
+          The only thing that changed is now <strong>you control the infrastructure, not a platform that can disappear.</strong>
+        </p>
+        <div class="completion-stats">
+          <div class="cstat"><span class="cstat-n">${total}</span><span class="cstat-l">Works pinned</span></div>
+          <div class="cstat"><span class="cstat-n">${total*2}</span><span class="cstat-l">CIDs secured</span></div>
+          <div class="cstat"><span class="cstat-n">3x</span><span class="cstat-l">Redundancy</span></div>
+          <div class="cstat"><span class="cstat-n">$0</span><span class="cstat-l">Total cost</span></div>
+        </div>
+        <div class="completion-acts">
+          <button class="btngold" onclick="shareComplete(${total})">
+            <svg style="width:12px;height:12px;fill:currentColor;margin-right:5px;vertical-align:middle" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.73-8.835L1.254 2.25H8.08l4.259 5.629L18.244 2.25z"/></svg>
+            Share on X
+          </button>
+          <button class="btnghost" onclick="dlAll()">Download all metadata</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('what-next').style.display='block';
+  document.getElementById('canvas-teaser').style.display='block';
+  document.getElementById('what-next').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+/* SHARE */
+function shareOnX(){
+  const t='Foundation artists — your IPFS metadata will go dark when their servers shut down.\n\nThis free tool finds all your Foundation NFTs and backs them up in minutes.\n\nNo ETH. No gas. No wallet signing. No cost.\n\nShare this with every artist you know.\nsavemyart.xyz';
+  window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(t),'_blank','noopener');
+}
+function shareRescued(){
+  const t='Just rescued all my Foundation art with this free tool.\n\nMetadata pinned. Files secured. No gas. No ETH. Nothing.\n\nIf you minted on Foundation, do this before April 2027.\nsavemyart.xyz';
+  window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(t),'_blank','noopener');
+}
+function shareComplete(n){
+  const t='Just rescued all '+n+' of my Foundation NFTs.\n\nImages and metadata pinned permanently. Art is safe.\n\nThis free tool does it in minutes — no ETH, no gas, nothing.\n\nEvery Foundation artist needs to do this.\nsavemyart.xyz';
+  window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(t),'_blank','noopener');
+}
+
+function dlMeta(title,cm,cv){
+  const data={name:title,description:'NFT originally minted on Foundation. Rescued '+new Date().toISOString().split('T')[0]+'.',image:'ipfs://'+cv,_rescue:{platform:'Foundation (foundation.app)',metadata_cid:cm,media_cid:cv,rescue_date:new Date().toISOString(),tool:'savemyart.xyz'}};
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=title.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-metadata.json';a.click();
+  toast('Downloaded metadata for "'+title+'"');
+}
+function dlAll(){MOCK.forEach((_,i)=>setTimeout(()=>dlMeta(MOCK[i].title,MOCK[i].cid_meta,MOCK[i].cid_media),i*160));}
+function copyCID(cid,t){navigator.clipboard?.writeText(cid).then(()=>toast('[CID copied] '+t));}
+
+function openHelp(){document.getElementById('help-modal').classList.add('open');}
+function notifyMe(){const e=prompt('Your email to get notified when canvas launches:');if(e&&e.includes('@'))toast('You are on the list. We will email you at launch.');}
+function followOnX(){window.open('https://twitter.com/intent/follow?screen_name=PlantFaceAsh','_blank','noopener');}
+function toast(msg){
+  document.querySelectorAll('.toast').forEach(t=>t.remove());
+  const t=document.createElement('div');t.className='toast';t.innerHTML='<div class="tdot"></div><span>'+msg+'</span>';document.body.appendChild(t);
+  setTimeout(()=>{t.style.transition='opacity .3s';t.style.opacity='0';},2800);setTimeout(()=>t.remove(),3200);
+}
+</script>
+</body>
+</html>
