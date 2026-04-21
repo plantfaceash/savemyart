@@ -1,6 +1,6 @@
 // api/scan.js
-// Scans Foundation contracts for NFTs owned by a given wallet address
-// Uses Alchemy NFT API — requires ALCHEMY_API_KEY environment variable
+// Finds Foundation NFTs minted by a given wallet address
+// Uses getMintedNfts which finds NFTs created by the address, not just owned
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,55 +12,39 @@ export default async function handler(req, res) {
   const ALCHEMY_KEY = process.env.ALCHEMY_API_KEY;
   if (!ALCHEMY_KEY) return res.status(500).json({ error: 'Scanner not configured' });
 
-  // Foundation's main Ethereum contract addresses
+  // Foundation's main contract addresses
   const FOUNDATION_CONTRACTS = [
-    '0x3B3ee1931Dc30C1957379FAc9aba94D1C48a5405', // Foundation shared contract
-    '0x68d0F6d1d99Bb830e17fFaA8ADB5BbeD9719A9dd', // Foundation drops v1
+    '0x3B3ee1931Dc30C1957379FAc9aba94D1C48a5405',
+    '0x68d0F6d1d99Bb830e17fFaA8ADB5BbeD9719A9dd',
   ];
 
   try {
     const allNfts = [];
 
+    // Strategy 1: getMintedNfts — finds NFTs the address originally minted
+    // This works even if the NFT is now in escrow or transferred
+    const mintedUrl = `https://eth-mainnet.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getMintedNfts?address=${encodeURIComponent(address)}&contractAddresses[]=${FOUNDATION_CONTRACTS[0]}&contractAddresses[]=${FOUNDATION_CONTRACTS[1]}&withMetadata=true&limit=100&tokenType=ERC721`;
+
+    const mintedRes = await fetch(mintedUrl);
+    if (mintedRes.ok) {
+      const mintedData = await mintedRes.json();
+      const minted = (mintedData.nfts || []).map(nft => formatNft(nft));
+      allNfts.push(...minted);
+    }
+
+    // Strategy 2: also check what they currently own from Foundation contracts
+    // (catches cases where they collected but didn't mint)
     for (const contract of FOUNDATION_CONTRACTS) {
-      let pageKey = '';
-      let hasMore = true;
-
-      while (hasMore) {
-        const params = new URLSearchParams({
-          owner: address,
-          'contractAddresses[]': contract,
-          withMetadata: 'true',
-          limit: '100',
-        });
-        if (pageKey) params.append('pageKey', pageKey);
-
-        const url = `https://eth-mainnet.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForOwner?${params}`;
-        const response = await fetch(url);
-
-        if (!response.ok) {
-          console.error('Alchemy error:', response.status);
-          break;
-        }
-
-        const data = await response.json();
-        const nfts = (data.ownedNfts || []).map(nft => ({
-          title: nft.name || nft.rawMetadata?.name || `Token #${nft.tokenId}`,
-          tokenId: nft.tokenId,
-          contract: nft.contract?.address,
-          chain: 'eth',
-          cid_meta: extractCID(nft.tokenUri),
-          cid_media: extractCID(nft.rawMetadata?.image || nft.rawMetadata?.animation_url),
-          image: nft.image?.cachedUrl || nft.image?.originalUrl || null,
-          listed: false, // Foundation listing status requires separate contract check
-        }));
-
-        allNfts.push(...nfts);
-        pageKey = data.pageKey || '';
-        hasMore = !!data.pageKey;
+      const ownedUrl = `https://eth-mainnet.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForOwner?owner=${encodeURIComponent(address)}&contractAddresses[]=${contract}&withMetadata=true&limit=100`;
+      const ownedRes = await fetch(ownedUrl);
+      if (ownedRes.ok) {
+        const ownedData = await ownedRes.json();
+        const owned = (ownedData.ownedNfts || []).map(nft => formatNft(nft));
+        allNfts.push(...owned);
       }
     }
 
-    // Deduplicate by tokenId + contract
+    // Deduplicate by contract + tokenId
     const seen = new Set();
     const unique = allNfts.filter(n => {
       const key = `${n.contract}-${n.tokenId}`;
@@ -77,13 +61,23 @@ export default async function handler(req, res) {
   }
 }
 
+function formatNft(nft) {
+  return {
+    title: nft.name || nft.title || nft.rawMetadata?.name || `Token #${nft.tokenId}`,
+    tokenId: nft.tokenId,
+    contract: nft.contract?.address,
+    chain: 'eth',
+    cid_meta: extractCID(nft.tokenUri),
+    cid_media: extractCID(nft.rawMetadata?.image || nft.rawMetadata?.animation_url),
+    image: nft.image?.cachedUrl || nft.image?.originalUrl || nft.media?.[0]?.gateway || null,
+    listed: false,
+  };
+}
+
 function extractCID(uri) {
   if (!uri) return null;
-  // ipfs://QmXXX or ipfs://QmXXX/file.json
-  if (uri.startsWith('ipfs://')) {
-    return uri.replace('ipfs://', '').split('/')[0];
-  }
-  // https://ipfs.io/ipfs/QmXXX or https://fnd-collections.mypinata.cloud/ipfs/QmXXX
+  if (typeof uri === 'object') uri = uri.raw || uri.gateway || '';
+  if (uri.startsWith('ipfs://')) return uri.replace('ipfs://', '').split('/')[0];
   const match = uri.match(/\/ipfs\/([a-zA-Z0-9]+)/);
   return match ? match[1] : null;
 }
