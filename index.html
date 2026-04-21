@@ -44,7 +44,7 @@ body{background:var(--bg);color:var(--t0);font-family:var(--sans);font-size:14px
 .sn{font-family:var(--mono);color:var(--gold);font-size:13px;font-weight:700;flex-shrink:0;min-width:36px;padding-top:1px}
 
 /* STATUS BAR */
-.statusbar{background:var(--gold);color:#040404;text-align:center;padding:9px 1rem;font-size:13px;font-weight:500;line-height:1.5}
+.statusbar{background:#1a3d28;border-bottom:1px solid var(--gborder);color:#a8dbb8;text-align:center;padding:8px 1rem;font-size:12px;line-height:1.4}.statusbar strong{color:#c8e8d0;font-weight:600}
 
 /* NAV */
 nav{padding:0 clamp(.8rem,4vw,2.5rem);height:56px;display:flex;align-items:center;justify-content:space-between;border-bottom:.5px solid var(--b0);background:rgba(7,7,7,0.97);position:sticky;top:0;z-index:100;backdrop-filter:blur(14px);gap:.75rem}
@@ -623,34 +623,40 @@ function showResults(nfts){
 }
 
 function nftCard(n,i,total){
-  const gradients=['g1','g2','g3','g4','g5','g6'];
-  const grad=gradients[i%gradients.length];
-  const statusClass={'held':'sb-held','listed':'sb-listed','sold':'sb-sold','unknown':'sb-backup'}[n.status]||'sb-backup';
-  const statusLabel={'held':'[held]','listed':'[listed]','sold':'[sold]','unknown':'[needs backup]'}[n.status]||'[needs backup]';
-
-  return`<div class="nftcard" id="card-${i}">
-    <div class="nftart">
-      <div class="${grad}" style="width:100%;height:100%;position:relative">
-        ${n.image?`<img src="${n.image}" onerror="this.style.display='none'" loading="lazy">`:''}
-      </div>
-      <div class="card-select" id="sel-${i}" onclick="toggleSelect(${i})" title="Select this piece"></div>
-      <div class="sbadge ${statusClass}" id="badge-${i}">${statusLabel}</div>
-    </div>
-    <div class="nftbody">
-      <div class="nftt" title="${n.title}">${n.title}</div>
-      <div class="nftch"><span class="chdot"></span>Ethereum #${n.tokenId}</div>
-      <div class="cidbox">
-        <div class="cidl">Metadata CID</div>
-        <div class="cidv" onclick="copyCID('${n.cid_meta||''}','${n.title}')">${n.cid_meta?n.cid_meta.slice(0,24)+'...':'No CID found'}</div>
-      </div>
-      <div class="nftbtns">
-        <button class="nb nbpin pulse-anim" id="pin-${i}" onclick="pinOne(${i},'${(n.cid_meta||'').replace(/'/g,'\\'')}','${(n.cid_media||'').replace(/'/g,'\\'')}','${n.title.replace(/'/g,'\\'')}',${total})">Pin free</button>
-        <button class="nb nbdl" onclick="dlMeta('${n.title.replace(/'/g,'\\'')}','${n.cid_meta||''}','${n.cid_media||''}')">JSON</button>
-        ${n.status==='listed'?`<button class="nb nb-delist" onclick="window.open('https://cidkeeper.valipokkann.in','_blank','noopener')" title="Use CIDKeeper to delist this piece from Foundation's contract">Delist</button>`:`<button class="nb nbeth" onclick="window.open('https://etherscan.io/token/${n.contract||''}?a=${n.tokenId}','_blank','noopener')">Etherscan</button>`}
-      </div>
-    </div>
-  </div>`;
+  const grads=['g1','g2','g3','g4','g5','g6'];
+  const grad=grads[i%grads.length];
+  const sc={'held':'sb-held','listed':'sb-listed','sold':'sb-sold','unknown':'sb-backup'}[n.status]||'sb-backup';
+  const sl={'held':'[held]','listed':'[listed]','sold':'[sold]','unknown':'[needs backup]'}[n.status]||'[needs backup]';
+  const cid=n.cid_meta?n.cid_meta.slice(0,24)+'...':'No CID found';
+  const img=n.image?'<img src="'+n.image+'" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0" loading="lazy">':'';
+  const delistBtn=n.status==='listed'
+    ?'<button class="nb nb-delist" onclick="cidkeeper()">Delist</button>'
+    :'<button class="nb nbeth" onclick="goEtherscan('+i+')">Etherscan</button>';
+  return '<div class="nftcard" id="card-'+i+'" data-idx="'+i+'" data-total="'+total+'" data-cm="'+encodeURIComponent(n.cid_meta||'')+'" data-cv="'+encodeURIComponent(n.cid_media||'')+'" data-title="'+encodeURIComponent(n.title||'Untitled')+'" data-contract="'+(n.contract||'')+'" data-tokenid="'+(n.tokenId||'')+'">'+
+    '<div class="nftart">'+
+      '<div class="'+grad+'" style="width:100%;height:100%;position:relative">'+img+'</div>'+
+      '<div class="card-select" id="sel-'+i+'" onclick="toggleSelect('+i+')" title="Select"></div>'+
+      '<div class="sbadge '+sc+'" id="badge-'+i+'">'+sl+'</div>'+
+    '</div>'+
+    '<div class="nftbody">'+
+      '<div class="nftt">'+(n.title||'Untitled')+'</div>'+
+      '<div class="nftch"><span class="chdot"></span>Ethereum #'+(n.tokenId||'')+'</div>'+
+      '<div class="cidbox"><div class="cidl">Metadata CID</div><div class="cidv" onclick="copyCIDCard('+i+')">'+cid+'</div></div>'+
+      '<div class="nftbtns">'+
+        '<button class="nb nbpin pulse-anim" id="pin-'+i+'" onclick="pinFromCard('+i+')">Pin free</button>'+
+        '<button class="nb nbdl" onclick="dlFromCard('+i+')">JSON</button>'+
+        delistBtn+
+      '</div>'+
+    '</div>'+
+  '</div>';
 }
+
+function getCard(i){return document.getElementById('card-'+i);}
+function pinFromCard(i){const c=getCard(i);pinOne(i,decodeURIComponent(c.dataset.cm||''),decodeURIComponent(c.dataset.cv||''),decodeURIComponent(c.dataset.title||'Untitled'),parseInt(c.dataset.total));}
+function dlFromCard(i){const c=getCard(i);dlMeta(decodeURIComponent(c.dataset.title||'Untitled'),decodeURIComponent(c.dataset.cm||''),decodeURIComponent(c.dataset.cv||''));}
+function copyCIDCard(i){const c=getCard(i);copyCID(decodeURIComponent(c.dataset.cm||''),decodeURIComponent(c.dataset.title||''));}
+function goEtherscan(i){const c=getCard(i);window.open('https://etherscan.io/token/'+c.dataset.contract+'?a='+c.dataset.tokenid,'_blank','noopener');}
+function cidkeeper(){window.open('https://cidkeeper.valipokkann.in','_blank','noopener');}
 
 /* SELECT */
 function toggleSelect(i){
