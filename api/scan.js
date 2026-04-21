@@ -28,8 +28,8 @@ export default async function handler(req, res) {
 
   const SHARED_CONTRACT    = '0x3b3ee1931dc30c1957379fac9aba94d1c48a5405';
   const FOUNDATION_FACTORIES = new Set([
-    '0x3b612a5b49e025a6e4baa4ee4fb1ef46d13588059',
-    '0x612e2dadddc89d91409e40f946f9f7cfe422e777e',
+    '0x3b612a5b49e025a6e4ba4ee4fb1ef46d13588059',
+    '0x612e2daddc89d91409e40f946f9f7cfe422e777e',
   ]);
   // Foundation marketplace escrow — tokens held here are "listed"
   const MARKETPLACE_ADDRS = new Set([
@@ -54,7 +54,7 @@ export default async function handler(req, res) {
         toAddress:   address,
         category: ['erc721'],
         withMetadata: false,
-        excludeZeroValue: true,
+        excludeZeroValue: false,
         maxCount: '0x3e8', // max 1000 per page
       };
       if (pageKey) params.pageKey = pageKey;
