@@ -8,6 +8,7 @@
 <meta name="description" content="Foundation shut down. Rescue your NFTs free in minutes. No ETH. No gas. No cost.">
 <meta property="og:title" content="Save My Art — Free Foundation NFT Rescue">
 <meta property="og:description" content="No ETH. No gas. No wallet signing. Rescue your Foundation NFTs and pin your metadata free.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230e0e0e'/><text x='2' y='24' font-family='monospace' font-size='22' font-weight='bold' fill='%235dba85'>◆</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -136,6 +137,28 @@ h1 em{font-style:italic;color:var(--gold)}
 .rbo:hover{border-color:var(--b2);color:var(--t0)}
 .rba{background:var(--gbg2);border-color:rgba(200,146,42,.25);color:var(--gold)}
 .rba:hover{background:var(--gbg)}
+
+/* FILTER BAR */
+.filter-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 0;margin-bottom:1rem;border-bottom:.5px solid var(--b0)}
+.filter-label{font-family:var(--mono);font-size:11px;color:var(--t2);margin-right:4px;letter-spacing:.06em}
+.filt{padding:5px 12px;border-radius:20px;font-size:11.5px;cursor:pointer;font-family:var(--mono);border:.5px solid var(--b1);background:transparent;color:var(--t2);transition:all .15s;white-space:nowrap}
+.filt:hover{border-color:var(--b2);color:var(--t1)}
+.filt.active{background:var(--s2);border-color:var(--gold);color:var(--gold)}
+.filt.active.green{border-color:var(--gborder);color:#5dba85;background:var(--greenbg)}
+.filter-count{font-family:var(--mono);font-size:11px;color:var(--t2);margin-left:auto;white-space:nowrap}
+.nftcard.hidden{display:none!important}
+
+/* COLLECTION GROUP */
+.coll-group{margin-bottom:1.5rem}
+.coll-header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--s1);border:.5px solid var(--b1);border-radius:var(--r2);margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.coll-header:hover{border-color:var(--b2)}
+.coll-name{font-size:13px;font-weight:600;color:var(--t0);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.coll-meta{font-family:var(--mono);font-size:11px;color:var(--t2);white-space:nowrap}
+.coll-toggle{font-family:var(--mono);font-size:11px;color:var(--t2);transition:transform .2s;flex-shrink:0}
+.coll-group.collapsed .coll-toggle{transform:rotate(-90deg)}
+.coll-group.collapsed .coll-grid{display:none}
+.coll-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+@media(max-width:480px){.coll-grid{grid-template-columns:1fr}}
 
 /* PIN PROGRESS */
 .pin-progress{background:var(--s1);border:.5px solid var(--gborder);border-radius:var(--r2);padding:1.25rem 1.5rem;margin-bottom:1.5rem}
@@ -590,32 +613,63 @@ function showResults(nfts){
   selectedCards.clear();
   const total=nfts.length;
   const listedCount=nfts.filter(n=>n.status==='listed').length;
+  const noCidCount=nfts.filter(n=>!n.cid_meta&&!n.cid_media).length;
+
+  // Group by contract for collection display
+  const groups={};
+  nfts.forEach((n,i)=>{
+    if(!groups[n.contract])groups[n.contract]={name:n.title.replace(/ ?#\d+$/,'').trim()||'Collection',tokens:[]};
+    groups[n.contract].tokens.push({...n,idx:i});
+  });
+
+  const groupsHtml=Object.entries(groups).map(([contract,g])=>{
+    const gid='grp-'+contract.slice(2,10);
+    const cards=g.tokens.map(n=>nftCard(n,n.idx,total)).join('');
+    return`<div class="coll-group" id="${gid}">
+      <div class="coll-header" onclick="toggleGroup('${gid}')">
+        <span class="coll-name">${g.name}</span>
+        <span class="coll-meta">[${g.tokens.length} piece${g.tokens.length!==1?'s':''}]</span>
+        <span class="coll-toggle">▾</span>
+      </div>
+      <div class="coll-grid">${cards}</div>
+    </div>`;
+  }).join('');
 
   document.getElementById('results-area').innerHTML=`
     <div class="reshdr">
       <div class="resfound">
         <h2>Found <em>${total} work${total!==1?'s':''}</em> from Foundation</h2>
-        <p>All tokens remain on Ethereum permanently. Pin your metadata below to secure your backup.</p>
+        <p>${Object.keys(groups).length} collection${Object.keys(groups).length!==1?'s':''} · Pin your metadata below to secure your backup.</p>
       </div>
       <div class="resacts">
         <button class="rb rbg" id="pin-all-btn" onclick="pinAll()">Pin all free</button>
         <button class="rb rba" onclick="selectAll()">Select all</button>
-        ${listedCount>0?`<button class="rb rbo" onclick="selectListed()" title="Select listed pieces to see delist options">Select listed (${listedCount})</button>`:''}
-        <button class="rb rbo" onclick="dlAll()">Download all metadata</button>
+        ${listedCount>0?`<button class="rb rbo" onclick="selectListed()">Select listed (${listedCount})</button>`:''}
+        <button class="rb rbo" onclick="dlAll()">Download all</button>
         <button class="rb rbo" onclick="shareRescued()">
           <svg style="width:11px;height:11px;fill:currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.73-8.835L1.254 2.25H8.08l4.259 5.629L18.244 2.25z"/></svg>
           Share
         </button>
       </div>
     </div>
+    <div class="filter-bar">
+      <span class="filter-label">filter:</span>
+      <button class="filt active green" data-filter="all" onclick="setFilter('all',this)">All (${total})</button>
+      <button class="filt" data-filter="needs-pinning" onclick="setFilter('needs-pinning',this)">Needs pinning (${total-noCidCount})</button>
+      ${listedCount>0?`<button class="filt" data-filter="listed" onclick="setFilter('listed',this)">Listed (${listedCount})</button>`:''}
+      <button class="filt" data-filter="sold" onclick="setFilter('sold',this)">Sold (${nfts.filter(n=>n.status==='sold').length})</button>
+      <button class="filt" data-filter="held" onclick="setFilter('held',this)">Held (${nfts.filter(n=>n.status==='held').length})</button>
+      ${noCidCount>0?`<button class="filt" data-filter="no-cid" onclick="setFilter('no-cid',this)">No CID (${noCidCount})</button>`:''}
+      <span class="filter-count" id="filter-count">${total} visible</span>
+    </div>
     <div id="progress-wrap" style="display:none" class="pin-progress">
       <div class="pp-label">Pinning your art to permanent storage...<span id="pp-count">0 / ${total}</span></div>
       <div class="pp-bar"><div class="pp-fill" id="pp-fill"></div></div>
     </div>
-    <div class="nftgrid">${nfts.map((n,i)=>nftCard(n,i,total)).join('')}</div>`;
+    <div id="collections-wrap">${groupsHtml}</div>`;
 
   setTimeout(()=>document.getElementById('results-area').scrollIntoView({behavior:'smooth',block:'start'}),150);
-  setTimeout(()=>toast('['+total+' works found] — pin them free below'),400);
+  setTimeout(()=>toast('['+total+' works found — '+Object.keys(groups).length+' collections]'),400);
 }
 
 function nftCard(n,i,total){
@@ -623,12 +677,24 @@ function nftCard(n,i,total){
   const grad=grads[i%grads.length];
   const sc={'held':'sb-held','listed':'sb-listed','sold':'sb-sold','unknown':'sb-backup'}[n.status]||'sb-backup';
   const sl={'held':'[held]','listed':'[listed]','sold':'[sold]','unknown':'[needs backup]'}[n.status]||'[needs backup]';
-  const cid=n.cid_meta?n.cid_meta.slice(0,24)+'...':'No CID found';
+  const hasCid=!!(n.cid_meta||n.cid_media);
+  const cid=n.cid_meta?n.cid_meta.slice(0,24)+'...':'No CID — cannot pin';
   const img=n.image?'<img src="'+n.image+'" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0" loading="lazy">':'';
   const delistBtn=n.status==='listed'
     ?'<button class="nb nb-delist" onclick="cidkeeper()">Delist</button>'
     :'<button class="nb nbeth" onclick="goEtherscan('+i+')">Etherscan</button>';
-  return '<div class="nftcard" id="card-'+i+'" data-idx="'+i+'" data-total="'+total+'" data-cm="'+encodeURIComponent(n.cid_meta||'')+'" data-cv="'+encodeURIComponent(n.cid_media||'')+'" data-title="'+encodeURIComponent(n.title||'Untitled')+'" data-contract="'+(n.contract||'')+'" data-tokenid="'+(n.tokenId||'')+'">'+
+  const pinBtn=hasCid
+    ?'<button class="nb nbpin pulse-anim" id="pin-'+i+'" onclick="pinFromCard('+i+')">Pin free</button>'
+    :'<button class="nb nbpin" id="pin-'+i+'" disabled style="opacity:.35;cursor:not-allowed">No CID</button>';
+  return '<div class="nftcard" id="card-'+i+'"'+
+    ' data-idx="'+i+'" data-total="'+total+'"'+
+    ' data-status="'+(n.status||'unknown')+'"'+
+    ' data-hascid="'+hasCid+'"'+
+    ' data-cm="'+encodeURIComponent(n.cid_meta||'')+'"'+
+    ' data-cv="'+encodeURIComponent(n.cid_media||'')+'"'+
+    ' data-title="'+encodeURIComponent(n.title||'Untitled')+'"'+
+    ' data-contract="'+(n.contract||'')+'"'+
+    ' data-tokenid="'+(n.tokenId||'')+'">'+
     '<div class="nftart">'+
       '<div class="'+grad+'" style="width:100%;height:100%;position:relative">'+img+'</div>'+
       '<div class="card-select" id="sel-'+i+'" onclick="toggleSelect('+i+')" title="Select"></div>'+
@@ -639,12 +705,46 @@ function nftCard(n,i,total){
       '<div class="nftch"><span class="chdot"></span>Ethereum #'+(n.tokenId||'')+'</div>'+
       '<div class="cidbox"><div class="cidl">Metadata CID</div><div class="cidv" onclick="copyCIDCard('+i+')">'+cid+'</div></div>'+
       '<div class="nftbtns">'+
-        '<button class="nb nbpin pulse-anim" id="pin-'+i+'" onclick="pinFromCard('+i+')">Pin free</button>'+
+        pinBtn+
         '<button class="nb nbdl" onclick="dlFromCard('+i+')">JSON</button>'+
         delistBtn+
       '</div>'+
     '</div>'+
   '</div>';
+}
+
+/* FILTER */
+let activeFilter='all';
+function setFilter(f, btn){
+  activeFilter=f;
+  document.querySelectorAll('.filt').forEach(b=>{b.classList.remove('active','green');});
+  btn.classList.add('active');
+  if(f==='all'||f==='needs-pinning'||f==='held')btn.classList.add('green');
+  applyFilter();
+  document.getElementById('results-area').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function applyFilter(){
+  let visible=0;
+  document.querySelectorAll('.nftcard').forEach(card=>{
+    const status=card.dataset.status||'unknown';
+    const hasCid=card.dataset.hascid==='true';
+    let show=true;
+    if(activeFilter==='listed')show=status==='listed';
+    else if(activeFilter==='sold')show=status==='sold';
+    else if(activeFilter==='held')show=status==='held';
+    else if(activeFilter==='needs-pinning')show=hasCid&&!card.classList.contains('rescued');
+    else if(activeFilter==='no-cid')show=!hasCid;
+    card.classList.toggle('hidden',!show);
+    if(show)visible++;
+  });
+  const fc=document.getElementById('filter-count');
+  if(fc)fc.textContent=visible+' visible';
+}
+
+/* COLLECTION GROUP TOGGLE */
+function toggleGroup(gid){
+  const g=document.getElementById(gid);
+  if(g)g.classList.toggle('collapsed');
 }
 
 function getCard(i){return document.getElementById('card-'+i);}
@@ -661,10 +761,18 @@ function toggleSelect(i){
   else{selectedCards.add(i);el.textContent='✓';el.classList.add('checked');}
 }
 function selectAll(){
+  // Select only visible cards (respects current filter)
+  let count=0;
   currentNfts.forEach((_,i)=>{
-    if(!pinned.has(i)){selectedCards.add(i);const el=document.getElementById('sel-'+i);if(el){el.textContent='✓';el.classList.add('checked');}}
+    const card=document.getElementById('card-'+i);
+    if(!pinned.has(i)&&card&&!card.classList.contains('hidden')){
+      selectedCards.add(i);
+      const el=document.getElementById('sel-'+i);
+      if(el){el.textContent='✓';el.classList.add('checked');}
+      count++;
+    }
   });
-  toast('All '+currentNfts.length+' pieces selected');
+  toast(count+' visible pieces selected');
 }
 function selectListed(){
   currentNfts.forEach((n,i)=>{
@@ -707,20 +815,27 @@ function markPinned(i,title,total){
   if(fill)fill.style.width=(pinnedCount/total*100)+'%';
   if(count)count.textContent=pinnedCount+' / '+total;
   toast('"'+title+'" pinned. Files secured.');
+  // Update data-status so filter works correctly after pinning
+  const card=document.getElementById('card-'+i);
+  if(card){card.dataset.hascid='false';card.dataset.status='pinned';}
+  applyFilter();
   if(pinnedCount===total)setTimeout(()=>showCompletion(total),600);
 }
 
 function pinAll(){
+  // Only pin cards that have CIDs and aren't already pinned
+  const pinnable=currentNfts.filter((_,i)=>!pinned.has(i)&&(currentNfts[i].cid_meta||currentNfts[i].cid_media));
   const total=currentNfts.length;
+  const pinnableTotal=pinnable.length;
+  if(pinnableTotal===0){toast('All pieces are already pinned or have no CID to pin.');return;}
   document.getElementById('progress-wrap').style.display='block';
   document.getElementById('pin-all-btn').disabled=true;
-  document.getElementById('pin-all-btn').textContent='Pinning all...';
+  document.getElementById('pin-all-btn').textContent='Pinning '+pinnableTotal+'...';
   let delay=0;
-  currentNfts.forEach((_,i)=>{
-    if(!pinned.has(i)){
-      setTimeout(()=>pinOne(i,currentNfts[i].cid_meta||'',currentNfts[i].cid_media||'',currentNfts[i].title||'Untitled',total),delay);
-      delay+=500;
-    }
+  pinnable.forEach((n,idx)=>{
+    const i=currentNfts.indexOf(n);
+    setTimeout(()=>pinOne(i,n.cid_meta||'',n.cid_media||'',n.title||'Untitled',total),delay);
+    delay+=300;
   });
 }
 
