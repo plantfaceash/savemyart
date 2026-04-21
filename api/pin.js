@@ -1,6 +1,6 @@
 // api/pin.js
-// Pins Foundation NFT CIDs to Filebase using IPFS Pinning Service API
-// Requires FILEBASE_IPFS_TOKEN environment variable (generated per-bucket in Filebase dashboard)
+// Fixed: Filebase IPFS Pinning Service uses Bearer accessKey:secretKey
+// NOT the bucket-scoped IPFS RPC token — that was the bug causing all pin failures
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,18 +10,27 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const IPFS_TOKEN = process.env.FILEBASE_IPFS_TOKEN;
-  if (!IPFS_TOKEN) return res.status(500).json({ error: 'Pinning not configured' });
+  const ACCESS_TOKEN = process.env.FILEBASE_ACCESS_TOKEN;
+  const SECRET_KEY   = process.env.FILEBASE_SECRET_KEY;
+
+  if (!ACCESS_TOKEN || !SECRET_KEY) {
+    return res.status(500).json({ error: 'Pinning not configured' });
+  }
+
+  // Filebase IPFS Pinning Service API auth format: Bearer accessKey:secretKey
+  const authHeader = `Bearer ${ACCESS_TOKEN}:${SECRET_KEY}`;
 
   const { cidMeta, cidMedia, name } = req.body;
-  if (!cidMeta && !cidMedia) return res.status(400).json({ error: 'At least one CID required' });
+  if (!cidMeta && !cidMedia) {
+    return res.status(400).json({ error: 'No CID to pin' });
+  }
 
   const pinCID = async (cid, pinName) => {
     if (!cid) return { success: true, skipped: true };
     const response = await fetch('https://api.filebase.io/v1/ipfs/pins', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${IPFS_TOKEN}`,
+        'Authorization': authHeader,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ cid, name: pinName }),
@@ -30,21 +39,21 @@ export default async function handler(req, res) {
       const data = await response.json().catch(() => ({}));
       return { success: true, requestid: data.requestid };
     }
-    const errorText = await response.text().catch(() => 'Unknown error');
-    console.error(`Pin failed for ${cid}:`, response.status, errorText);
-    return { success: false, error: errorText };
+    const errText = await response.text().catch(() => 'Unknown error');
+    console.error(`Pin failed [${response.status}]:`, errText);
+    return { success: false, error: `Filebase error ${response.status}: ${errText}` };
   };
 
   try {
-    const safeName = (name || 'untitled').replace(/[^a-zA-Z0-9\s\-_]/g, '').trim();
+    const safeName = (name || 'untitled').replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().slice(0, 64);
     const [metaResult, mediaResult] = await Promise.all([
-      pinCID(cidMeta, `${safeName}-metadata`),
+      pinCID(cidMeta,  `${safeName}-metadata`),
       pinCID(cidMedia, `${safeName}-media`),
     ]);
     const success = metaResult.success && mediaResult.success;
     res.status(success ? 200 : 500).json({ success, meta: metaResult, media: mediaResult });
   } catch (err) {
     console.error('Pin error:', err);
-    res.status(500).json({ error: 'Pinning failed. Please try again.' });
+    res.status(500).json({ error: err.message });
   }
 }
