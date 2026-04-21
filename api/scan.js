@@ -1,8 +1,17 @@
-// api/scan.js — FINAL
-// Finds ALL Foundation NFTs ever created by an artist
-// Strategy 1: Factory event logs → personal collection contracts → all tokens
-// Strategy 2: Mint transfer events on shared Foundation contract
-// No extra APIs beyond Alchemy needed
+// api/scan.js — DEFINITIVE VERSION
+//
+// Why previous versions failed:
+// - getNFTsForOwner: only returns currently held tokens (misses listed/sold)
+// - Factory eth_getLogs over 10M blocks: silently returns empty on Alchemy
+// - getMintedNfts with contract filter: same ownership problem
+//
+// This version:
+// 1. Gets ALL ERC721 mints to artist from 0x0 (no contract filter) via alchemy_getAssetTransfers
+//    Foundation ALWAYS mints to artist wallet first, then artist lists.
+//    So all 150 tokens will appear here regardless of current listing status.
+// 2. Verifies each contract is Foundation via factory() call
+// 3. For each personal collection found, enumerates ALL tokens via getNFTsForContract
+// 4. Uses getOwnersForContract to determine held/listed/sold status
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -17,142 +26,163 @@ export default async function handler(req, res) {
   const RPC = `https://eth-mainnet.g.alchemy.com/v2/${KEY}`;
   const NFT = `https://eth-mainnet.g.alchemy.com/nft/v3/${KEY}`;
 
-  // Foundation contracts
-  const SHARED  = '0x3B3ee1931Dc30C1957379FAc9aba94D1C48a5405';
-  const FACTORY = [
-    '0x3B612a5B49e025a6e4bA4eE4FB1EF46D13588059',
-    '0x612E2DadDc89d91409e40f946f9f7CfE422e777E',
-  ];
-  // Foundation marketplace escrow — tokens here are "listed"
-  const MARKETPLACE = [
+  const SHARED_CONTRACT    = '0x3b3ee1931dc30c1957379fac9aba94d1c48a5405';
+  const FOUNDATION_FACTORIES = new Set([
+    '0x3b612a5b49e025a6e4baa4ee4fb1ef46d13588059',
+    '0x612e2dadddc89d91409e40f946f9f7cfe422e777e',
+  ]);
+  // Foundation marketplace escrow — tokens held here are "listed"
+  const MARKETPLACE_ADDRS = new Set([
     '0xcda72070e455bb31c7690a170224ce43623d0b6f',
-    '0x7e9e4c0876b2102f33a1d82117cc73b7fddd0032',
-  ];
+    '0x0e3a2a1f2146d86a604adc220b4967a898d7fe07',
+  ]);
 
-  // Normalise address
-  let addr = address.trim();
-  if (!addr.startsWith('0x')) {
-    // Attempt ENS resolution via public ENS reverse lookup
-    try {
-      const ensRes = await rpc(RPC, 'eth_call', [{
-        to: '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e',
-        data: '0x02571be3' + namehash(addr),
-      }, 'latest']);
-      if (ensRes && ensRes !== '0x' + '0'.repeat(64)) {
-        // Get resolver address
-        const resolverAddr = '0x' + ensRes.slice(26);
-        // Call addr(node) on resolver
-        const addrRes = await rpc(RPC, 'eth_call', [{
-          to: resolverAddr,
-          data: '0x3b3b57de' + namehash(addr),
-        }, 'latest']);
-        if (addrRes && addrRes.length >= 66) {
-          addr = '0x' + addrRes.slice(26);
-        }
-      }
-    } catch { /* ENS resolution failed, continue with raw input */ }
-  }
-
-  const addrLC    = addr.toLowerCase();
-  const addrTopic = '0x' + '0'.repeat(24) + addrLC.slice(2);
-
-  const results = new Map();
+  const addrLC = address.toLowerCase();
+  const results = new Map(); // key = "contract-tokenId" → nft object
 
   try {
-    // ─── STRATEGY 1: Personal collection contracts via factory events ───────
-    const personalContracts = new Set();
+    // ── STEP 1: Get ALL ERC721 mints ever sent to artist ─────────────────────
+    // No contract filter = catches shared contract AND all personal collections
+    // Foundation always mints to artist wallet first (even for "mint and list" flow)
+    const allMintTransfers = [];
+    let pageKey = '';
+    do {
+      const params = {
+        fromBlock: '0xB00000', // block ~11.5M = Feb 2021, Foundation launch
+        toBlock:   'latest',
+        fromAddress: '0x0000000000000000000000000000000000000000',
+        toAddress:   address,
+        category: ['erc721'],
+        withMetadata: false,
+        excludeZeroValue: true,
+        maxCount: '0x3e8', // max 1000 per page
+      };
+      if (pageKey) params.pageKey = pageKey;
+      const data = await rpcCall(RPC, 'alchemy_getAssetTransfers', [params]);
+      allMintTransfers.push(...(data?.transfers || []));
+      pageKey = data?.pageKey || '';
+    } while (pageKey);
 
-    for (const factory of FACTORY) {
-      // Try creator address in topics[1] AND topics[2]
-      // We don't know the exact ABI so we check both positions
-      for (let pos = 1; pos <= 2; pos++) {
-        const topics = Array(pos + 1).fill(null);
-        topics[pos] = addrTopic;
-
-        const logs = await rpc(RPC, 'eth_getLogs', [{
-          fromBlock: '0xA7D8C0', // ~Oct 2020, before Foundation launch
-          toBlock: 'latest',
-          address: factory,
-          topics,
-        }]);
-
-        for (const log of (logs || [])) {
-          // Any address-shaped topic that isn't the artist is a collection contract
-          for (const topic of log.topics.slice(1)) {
-            if (topic && topic.startsWith('0x000000000000000000000000')) {
-              const candidate = '0x' + topic.slice(26);
-              if (candidate.toLowerCase() !== addrLC) {
-                personalContracts.add(candidate);
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // ─── STRATEGY 2: Enumerate all tokens in each personal collection ────────
-    for (const contract of personalContracts) {
-      let pageKey = '';
-      let hasMore  = true;
-
-      while (hasMore) {
-        const url = `${NFT}/getNFTsForContract?contractAddress=${contract}`
-          + `&withMetadata=true&includeOwners=true&limit=100`
-          + (pageKey ? `&startToken=${pageKey}` : '');
-
-        const data = await getJSON(url);
-
-        for (const nft of (data?.nfts || [])) {
-          const key = `${contract.toLowerCase()}-${nft.tokenId}`;
-          if (!results.has(key)) {
-            results.set(key, fmt(nft, addrLC, MARKETPLACE));
-          }
-        }
-
-        pageKey  = data?.nextToken || '';
-        hasMore  = !!data?.nextToken;
-      }
-    }
-
-    // ─── STRATEGY 3: Shared contract mint transfer events ────────────────────
-    const sharedMints = await rpc(RPC, 'alchemy_getAssetTransfers', [{
-      fromBlock: '0xB41C00', // ~block 11,800,000 Feb 2021
-      toBlock:   'latest',
-      fromAddress: '0x0000000000000000000000000000000000000000',
-      toAddress:   addr,
-      contractAddresses: [SHARED],
-      category: ['erc721'],
-      withMetadata: true,
-      excludeZeroValue: true,
-      maxCount: '0x64',
-    }]);
-
-    for (const tx of (sharedMints?.transfers || [])) {
+    // Group tokenIds by contract
+    const byContract = new Map();
+    for (const tx of allMintTransfers) {
+      const contract = tx.rawContract?.address?.toLowerCase();
+      if (!contract) continue;
       const rawId  = tx.erc721TokenId || tx.tokenId;
       const tokenId = rawId ? parseInt(rawId, 16).toString() : null;
       if (!tokenId) continue;
+      if (!byContract.has(contract)) byContract.set(contract, new Set());
+      byContract.get(contract).add(tokenId);
+    }
 
-      const key = `${SHARED.toLowerCase()}-${tokenId}`;
-      if (!results.has(key)) {
+    if (byContract.size === 0) {
+      return res.status(200).json({ nfts: [], count: 0 });
+    }
+
+    // ── STEP 2: Identify which contracts are Foundation ───────────────────────
+    // factory() selector = 0xc45a0155 (keccak256("factory()")[0:4])
+    const foundationPersonalContracts = new Set();
+
+    for (const contract of byContract.keys()) {
+      if (contract === SHARED_CONTRACT) continue;
+      try {
+        const result = await rpcCall(RPC, 'eth_call', [
+          { to: contract, data: '0xc45a0155' },
+          'latest',
+        ]);
+        if (result && result.length >= 66) {
+          const factoryAddr = '0x' + result.slice(26).toLowerCase();
+          if (FOUNDATION_FACTORIES.has(factoryAddr)) {
+            foundationPersonalContracts.add(contract);
+          }
+        }
+      } catch { /* not a Foundation personal collection */ }
+    }
+
+    // ── STEP 3: For each personal collection, enumerate ALL tokens ────────────
+    // getNFTsForContract returns all tokens regardless of who currently holds them
+    for (const contract of foundationPersonalContracts) {
+      let startToken = '';
+      let hasMore    = true;
+
+      while (hasMore) {
+        const url = `${NFT}/getNFTsForContract?contractAddress=${contract}`
+          + `&withMetadata=true&limit=100`
+          + (startToken ? `&startToken=${startToken}` : '');
+        const data = await getJSON(url);
+
+        for (const nft of (data?.nfts || [])) {
+          const key = `${contract}-${nft.tokenId}`;
+          if (!results.has(key)) {
+            results.set(key, fmtNFT(nft, contract));
+          }
+        }
+
+        startToken = data?.nextToken || '';
+        hasMore    = !!data?.nextToken;
+      }
+
+      // ── STEP 4: Determine status using owner data ─────────────────────────
+      try {
+        const ownersData = await getJSON(
+          `${NFT}/getOwnersForContract?contractAddress=${contract}&withTokenBalances=true`
+        );
+        for (const owner of (ownersData?.owners || [])) {
+          const ownerLC = (owner.ownerAddress || '').toLowerCase();
+          for (const tb of (owner.tokenBalances || [])) {
+            const key = `${contract}-${tb.tokenId}`;
+            if (!results.has(key)) continue;
+            const nft = results.get(key);
+            if (ownerLC === addrLC)                       nft.status = 'held';
+            else if (MARKETPLACE_ADDRS.has(ownerLC))      nft.status = 'listed';
+            else                                           nft.status = 'sold';
+          }
+        }
+      } catch { /* owner data unavailable, status stays 'unknown' */ }
+    }
+
+    // ── STEP 5: Process Foundation shared contract tokens ─────────────────────
+    const sharedTokenIds = Array.from(byContract.get(SHARED_CONTRACT) || []);
+
+    // Batch fetch metadata in groups of 10 to stay fast
+    for (let i = 0; i < sharedTokenIds.length; i += 10) {
+      const batch = sharedTokenIds.slice(i, i + 10);
+      await Promise.all(batch.map(async tokenId => {
+        const key = `${SHARED_CONTRACT}-${tokenId}`;
+        if (results.has(key)) return;
         try {
-          const meta = await getJSON(
-            `${NFT}/getNFTMetadata?contractAddress=${SHARED}&tokenId=${tokenId}&includeOwners=true`
+          const data = await getJSON(
+            `${NFT}/getNFTMetadata?contractAddress=${SHARED_CONTRACT}&tokenId=${tokenId}`
           );
-          results.set(key, fmt(meta, addrLC, MARKETPLACE));
+          results.set(key, fmtNFT(data, SHARED_CONTRACT, tokenId));
         } catch {
           results.set(key, {
-            title:     `Token #${tokenId}`,
-            tokenId,
-            contract:  SHARED,
-            chain:     'eth',
-            cid_meta:  null,
-            cid_media: null,
-            image:     null,
-            status:    'unknown',
+            title: `Token #${tokenId}`, tokenId,
+            contract: SHARED_CONTRACT, chain: 'eth',
+            cid_meta: null, cid_media: null, image: null, status: 'unknown',
           });
         }
-      }
+      }));
     }
+
+    // ── STEP 6: Determine status for shared contract tokens ───────────────────
+    // Quick check: which tokens is artist currently holding on shared contract?
+    try {
+      const heldData = await getJSON(
+        `${NFT}/getNFTsForOwner?owner=${address}`
+        + `&contractAddresses[]=${SHARED_CONTRACT}`
+        + `&withMetadata=false&limit=100`
+      );
+      const heldIds = new Set((heldData?.ownedNfts || []).map(n => n.tokenId));
+      for (const tokenId of sharedTokenIds) {
+        const key = `${SHARED_CONTRACT}-${tokenId}`;
+        if (!results.has(key)) continue;
+        const nft = results.get(key);
+        if (nft.status === 'unknown') {
+          nft.status = heldIds.has(tokenId) ? 'held' : 'sold';
+        }
+      }
+    } catch { /* status stays unknown */ }
 
     const nfts = Array.from(results.values());
     res.status(200).json({ nfts, count: nfts.length });
@@ -163,24 +193,13 @@ export default async function handler(req, res) {
   }
 }
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmt(nft, artistLC, marketplaces) {
-  const owner = (
-    nft.owners?.[0]?.ownerAddress ||
-    nft.owner ||
-    ''
-  ).toLowerCase();
-
-  let status = 'sold';
-  if (!owner)                          status = 'unknown';
-  else if (owner === artistLC)         status = 'held';
-  else if (marketplaces.includes(owner)) status = 'listed';
-
+function fmtNFT(nft, contractFallback, tokenIdFallback) {
   return {
-    title:     nft.name || nft.rawMetadata?.name || `Token #${nft.tokenId}`,
-    tokenId:   nft.tokenId,
-    contract:  nft.contract?.address || '',
+    title:     nft.name || nft.rawMetadata?.name || `Token #${nft.tokenId || tokenIdFallback}`,
+    tokenId:   nft.tokenId || tokenIdFallback,
+    contract:  (nft.contract?.address || contractFallback || '').toLowerCase(),
     chain:     'eth',
     cid_meta:  extractCID(nft.tokenUri?.raw || nft.tokenUri?.gateway),
     cid_media: extractCID(
@@ -188,8 +207,8 @@ function fmt(nft, artistLC, marketplaces) {
       nft.rawMetadata?.animation_url ||
       nft.media?.[0]?.uri
     ),
-    image: nft.image?.cachedUrl || nft.image?.originalUrl || null,
-    status,
+    image:  nft.image?.cachedUrl || nft.image?.originalUrl || null,
+    status: 'unknown',
   };
 }
 
@@ -202,48 +221,19 @@ function extractCID(uri) {
   return m ? m[1] : null;
 }
 
-async function rpc(url, method, params) {
+async function rpcCall(url, method, params) {
   const r = await fetch(url, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
   });
   const d = await r.json();
+  if (d.error) throw new Error(d.error.message);
   return d.result;
 }
 
 async function getJSON(url) {
   const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
-}
-
-// Minimal ENS namehash (handles simple "name.eth" cases)
-function namehash(name) {
-  let node = '0000000000000000000000000000000000000000000000000000000000000000';
-  if (name === '') return node;
-  const labels = name.toLowerCase().split('.').reverse();
-  for (const label of labels) {
-    const labelHash = keccak256hex(label);
-    node = keccak256hex(node + labelHash);
-  }
-  return node;
-}
-
-// Minimal keccak256 — only used for ENS, falls back gracefully if unavailable
-function keccak256hex(str) {
-  // Simple fallback: if Web Crypto is not available, return empty hash
-  // In Node.js serverless environment, we can use crypto module
-  try {
-    const crypto = globalThis.crypto || require('crypto');
-    const buf = typeof str === 'string'
-      ? Buffer.from(str, str.length === 64 ? 'hex' : 'utf8')
-      : str;
-    if (crypto.subtle) {
-      // async version not usable here inline; fall back
-      return '0'.repeat(64);
-    }
-    return require('crypto').createHash('sha3-256').update(buf).digest('hex');
-  } catch {
-    return '0'.repeat(64);
-  }
 }
