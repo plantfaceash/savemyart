@@ -7,7 +7,15 @@
 <title>Save My Art — Rescue Your Foundation NFTs Free</title>
 <meta name="description" content="Your Foundation NFTs still exist. Their files may not. Back them up free before Foundation's servers go dark. No ETH, no gas, no wallet signing.">
 <meta property="og:title" content="Save My Art — Free Foundation NFT Rescue">
-<meta property="og:description" content="No ETH. No gas. No wallet signing. Rescue your Foundation NFTs and pin your metadata free.">
+<meta property="og:description" content="Your Foundation NFTs still exist. Their files may not. Back them up free — no ETH, no gas, no wallet signing.">
+<meta property="og:image" content="https://savemyart.xyz/og.png">
+<meta property="og:url" content="https://savemyart.xyz">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Save My Art — Free Foundation NFT Rescue">
+<meta name="twitter:description" content="Your Foundation NFTs still exist. Their files may not. Back them up free — no ETH, no gas, no wallet signing.">
+<meta name="twitter:image" content="https://savemyart.xyz/og.png">
+<meta name="twitter:creator" content="@PlantFaceAsh">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230e0e0e'/><text x='2' y='24' font-family='monospace' font-size='22' font-weight='bold' fill='%235dba85'>◆</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
@@ -283,6 +291,7 @@ h1 em{font-style:italic;color:var(--gold)}
 /* COMPLETION */
 .completion{max-width:940px;margin:0 auto;padding:0 clamp(1rem,4vw,2rem) 2rem;animation:rise .4s ease}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes secured-pulse{0%,100%{text-shadow:0 0 8px rgba(93,186,133,.4);opacity:1}50%{text-shadow:0 0 28px rgba(93,186,133,.9);opacity:.7}}
 .completion-hero{text-align:center;padding:3rem 1rem 2.5rem;border-bottom:.5px solid var(--b0);margin-bottom:3rem}
 .completion-mono{font-family:var(--mono);font-size:11px;color:#5dba85;letter-spacing:.18em;margin-bottom:1.2rem;display:flex;align-items:center;justify-content:center;gap:8px}
 .cpulse{width:8px;height:8px;border-radius:50%;background:#5dba85;animation:pulse 1.5s ease-in-out infinite}
@@ -439,7 +448,7 @@ footer{padding:1.4rem clamp(1rem,4vw,2.5rem);display:flex;justify-content:space-
       <span style="color:#5dba85;flex-shrink:0;margin-top:1px">✓</span>
       <div class="gastext">
         <strong>Scanning: free. Pinning: free. No ETH, no gas, no wallet signing.</strong>
-        <span class="gasnote-sub">Delisting an active Foundation listing requires a small gas fee (it's an on-chain transaction) and the only step that costs anything. <a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" style="color:#8acba0">Check current gas prices ↗</a></span>
+        <span class="gasnote-sub">Delisting an active Foundation listing requires a small gas fee (it's an on-chain transaction) and the only step that costs anything. <a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" style="color:#5dba85">Check current gas prices ↗</a></span>
       </div>
     </div>
   </div>
@@ -533,6 +542,7 @@ footer{padding:1.4rem clamp(1rem,4vw,2.5rem);display:flex;justify-content:space-
     Foundation built something real. This exists to protect what they created.
     <br><a href="#" onclick="shareOnX()">Share with every Foundation artist you know →</a>
     <div class="ftcredit">built with love for art and artists by Ash <a href="https://x.com/PlantFaceAsh" target="_blank" rel="noopener">@PlantFaceAsh</a></div>
+    <div class="ftcredit" style="margin-top:4px">Pinning powered by <a href="https://pinata.cloud" target="_blank" rel="noopener">Pinata</a> · <a href="https://docs.pinata.cloud" target="_blank" rel="noopener">Pinata docs</a></div>
   </div>
   <div class="ftlinks">
     <button class="ftlink" onclick="shareOnX()">Share on X</button>
@@ -557,7 +567,7 @@ footer{padding:1.4rem clamp(1rem,4vw,2.5rem);display:flex;justify-content:space-
         <div class="hs"><span class="sn">[01]</span><div class="hst"><h4>Enter your wallet address</h4><p>Paste your public address or connect your wallet. We never ask you to sign anything. No transaction. Nothing spent.</p></div></div>
         <div class="hs"><span class="sn">[02]</span><div class="hst"><h4>We find every Foundation NFT you've ever minted</h4><p>We scan Foundation's shared contract and your personal collection contracts. This finds everything: held pieces, listed pieces, and sold pieces.</p></div></div>
         <div class="hs"><span class="sn">[03]</span><div class="hst"><h4>Pin your files free</h4><p>Click "Pin all free" and we handle everything server-side via Filebase. Your files get backed up to a redundant pinning node independent of Foundation. Costs nothing.</p></div></div>
-        <div class="hs"><span class="sn">[04]</span><div class="hst"><h4>Delist listed pieces if needed</h4><p>If you want to move listed pieces to a new platform, you'll need to delist them first. Each listed card has a "Delist via CIDKeeper" button which takes you to CIDKeeper, a trusted community tool that handles this. Each delist requires a small gas fee.</p></div></div>
+        <div class="hs"><span class="sn">[04]</span><div class="hst"><h4>Delist listed pieces if needed</h4><p>If you want to move listed pieces to a new platform, delist them on Foundation first using the Delist button on each card. Foundation is building a bulk tool. Until then, open listings one at a time. Each delist requires a small gas fee.</p></div></div>
         <div class="hs"><span class="sn">[05]</span><div class="hst"><h4>Move forward</h4><p>Art safe. List on Zora or Manifold today. Or wait for canvas, a new platform being built right now with zero fees, forever.</p></div></div>
       </div>
       <div class="sep"></div>
@@ -616,9 +626,9 @@ async function connectWallet(){
 /* SCAN */
 const STEPS=[
   'Querying Foundation shared contract for your early pieces',
-  'Scanning Foundation factory contracts for your personal collections',
-  'Fetching all tokens from your collection contracts',
-  'Retrieving IPFS metadata and current status for each piece'
+  'Finding your personal collection contracts',
+  'Fetching all tokens across your collections',
+  'Retrieving IPFS metadata and current ownership status'
 ];
 let currentNfts=[];
 let pinnedCount=0;
@@ -674,7 +684,13 @@ function doRescue(){
     .catch(err=>{
       clearInterval(stepIv);
       btn.disabled=false;btn.textContent='Rescue my art';
-      toast('Scan failed. Please try again.');
+      currentNfts=[];selectedCards.clear();pinned.clear();pinnedCount=0;activeFilter='all';
+      document.getElementById('results-area').innerHTML=`
+        <div class="scanning">
+          <p class="stext" style="color:#e06060">[scan failed]</p>
+          <p style="font-size:13px;color:var(--t2);margin-top:8px">Something went wrong. Check your address and try again.<br>If the problem persists, the network may be busy.</p>
+          <button class="btngold" style="margin-top:1rem" onclick="document.getElementById('results-area').innerHTML='';document.getElementById('wallet-addr').focus()">Try again</button>
+        </div>`;
       console.error(err);
     });
 }
@@ -1055,13 +1071,24 @@ function showCompletion(total){
     <div class="completion">
       <div class="completion-hero">
         <div class="completion-mono"><span class="cpulse"></span> rescue complete</div>
-        <div style="font-family:var(--mono);font-size:1.1rem;color:#5dba85;letter-spacing:.04em;margin-bottom:.75rem;text-shadow:0 0 16px rgba(93,186,133,.5)">[◆ ${total} piece${total!==1?'s':''} secured forever]</div>
+        <div style="font-family:var(--mono);font-size:1.1rem;color:#5dba85;letter-spacing:.04em;margin-bottom:.75rem;text-shadow:0 0 16px rgba(93,186,133,.5);animation:secured-pulse 0.6s ease-in-out 4">[◆ ${total} piece${total!==1?'s':''} secured forever]</div>
         <h2 class="completion-title">Your art is safe.<br><em>It always will be.</em></h2>
         <p class="completion-sub">
-          Pinned to IPFS, independent of Foundation's servers. Your tokens are unchanged. Your CIDs are unchanged.
-          <strong>You now control the infrastructure.</strong>
+          Pinned to IPFS via <a href="https://pinata.cloud" target="_blank" rel="noopener" style="color:var(--gold)">Pinata</a>, independent of Foundation's servers. Your tokens are unchanged. Your CIDs are unchanged. <strong>You now control the infrastructure.</strong>
           ${listedCount>0?`<br><br><strong>${listedCount} piece${listedCount!==1?'s':''} still listed on Foundation.</strong> Delist using the buttons on each card before moving them to a new platform. <a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" style="color:var(--gold)">Check gas prices ↗</a>`:''}
         </p>
+        <div style="background:var(--s2);border:.5px solid var(--gborder);border-radius:var(--r2);padding:14px 16px;margin:1.25rem 0;text-align:left">
+          <div style="font-family:var(--mono);font-size:10px;color:#5dba85;letter-spacing:.1em;margin-bottom:8px">[transparency]</div>
+          <p style="font-size:12.5px;color:var(--t1);line-height:1.7">
+            Your files are publicly accessible on IPFS right now. savemyart.xyz will never delete your pins.
+            For extra security, we recommend pinning your own copy too using your own free
+            <a href="https://pinata.cloud" target="_blank" rel="noopener" style="color:var(--gold)">Pinata account</a>.
+            That way your files survive even if this tool ever goes offline.
+            <br><br>
+            Verify your files are live: each CID below links directly to your file on IPFS.
+          </p>
+          <div id="cid-verify-list" style="margin-top:10px;display:flex;flex-direction:column;gap:4px;font-family:var(--mono);font-size:11px"></div>
+        </div>
         <div class="completion-stats">
           <div class="cstat"><span class="cstat-n">${total}</span><span class="cstat-l">Works pinned</span></div>
           <div class="cstat"><span class="cstat-n">${total*2}</span><span class="cstat-l">CIDs secured</span></div>
@@ -1085,6 +1112,17 @@ function showCompletion(total){
   document.getElementById('canvas-teaser').style.display='block';
   // Scroll to completion, not what-next
   setTimeout(()=>document.getElementById('completion-area').scrollIntoView({behavior:'smooth',block:'start'}),100);
+  // Populate CID verification links
+  setTimeout(()=>{
+    const list=document.getElementById('cid-verify-list');
+    if(!list)return;
+    const pinned_nfts=currentNfts.filter(n=>n.cid_meta||n.cid_media).slice(0,8);
+    list.innerHTML=pinned_nfts.map(n=>{
+      const cid=n.cid_meta||n.cid_media;
+      const short=cid?cid.slice(0,20)+'...':'';
+      return cid?'<a href="https://ipfs.io/ipfs/'+cid+'" target="_blank" rel="noopener" style="color:#5dba85;text-decoration:none;display:block;padding:2px 0">[◆] '+escapeHtml(n.title||'Untitled')+' <span style="opacity:.5">'+short+'</span> ↗</a>':'';
+    }).join('')+(currentNfts.filter(n=>n.cid_meta||n.cid_media).length>8?'<span style="opacity:.5">...and '+(currentNfts.filter(n=>n.cid_meta||n.cid_media).length-8)+' more</span>':'');
+  },300);
 }
 
 /* DOWNLOAD */
@@ -1128,6 +1166,7 @@ function notifyMe(){
 function followOnX(){window.open('https://twitter.com/intent/follow?screen_name=PlantFaceAsh','_blank','noopener');toast('[Following @PlantFaceAsh] You\'ll see the canvas launch on X.');}
 
 /* TOAST */
+function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function toast(msg){
   document.querySelectorAll('.toast').forEach(t=>t.remove());
   const t=document.createElement('div');t.className='toast';t.innerHTML='<div class="tdot"></div><span>'+msg+'</span>';document.body.appendChild(t);
@@ -1175,7 +1214,7 @@ window.addEventListener('scroll',()=>{
       <hr class="rinfo-sep">
       <div class="rinfo-gas">
         Pinning is always <strong style="color:#b0ddc0">free. No gas, no cost.</strong> Delisting from Foundation requires a small on-chain gas fee.
-        <br><a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener">Check current Ethereum gas prices ↗</a>
+        <br><a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" style="color:#5dba85">Check current Ethereum gas prices ↗</a>
       </div>
     </div>
   </div>
