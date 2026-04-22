@@ -1,7 +1,7 @@
-// api/scan.js — FINAL WORKING VERSION
-// Uses alchemy_getAssetTransfers (proven: returns all mint transfers)
-// NO factory() verification — that was silently killing results
-// All contracts from mint transfers are used directly
+// api/scan.js — FINAL
+// ENS: resolved via api.ensideas.com (no packages needed)
+// CID: ChatGPT's verified CID_RE regex pattern
+// Returns: has_cid + display_cid as single source of truth
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,24 +10,48 @@ export default async function handler(req, res) {
   const { address } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
 
+  const input = address.trim();
+  const isHex = /^0x[a-fA-F0-9]{40}$/.test(input);
+  const isENS = /\.eth$/i.test(input);
+
+  if (!isHex && !isENS) {
+    return res.status(400).json({
+      error: 'Invalid input. Enter a wallet address (0x...) or ENS name (name.eth)',
+    });
+  }
+
   const KEY = process.env.ALCHEMY_API_KEY;
   if (!KEY) return res.status(500).json({ error: 'Not configured' });
 
   const RPC = `https://eth-mainnet.g.alchemy.com/v2/${KEY}`;
   const NFT = `https://eth-mainnet.g.alchemy.com/nft/v3/${KEY}`;
 
+  // Resolve ENS to hex address
+  let resolvedAddress = input;
+  if (isENS) {
+    try {
+      const r = await fetch(`https://api.ensideas.com/ens/resolve/${encodeURIComponent(input)}`);
+      if (!r.ok) throw new Error('not found');
+      const d = await r.json();
+      if (!d?.address) throw new Error('no address');
+      resolvedAddress = d.address;
+    } catch {
+      return res.status(400).json({
+        error: `Could not resolve ENS name "${input}". Try pasting the wallet address directly.`,
+      });
+    }
+  }
+
+  const addrLC = resolvedAddress.toLowerCase();
   const SHARED = '0x3b3ee1931dc30c1957379fac9aba94d1c48a5405';
   const MARKETPLACE = new Set([
     '0xcda72070e455bb31c7690a170224ce43623d0b6f',
     '0x0e3a2a1f2146d86a604adc220b4967a898d7fe07',
   ]);
-
-  const addrLC = address.toLowerCase();
   const results = new Map();
 
   try {
-    // Get ALL ERC721 mints to artist — no contract filter
-    // Debug confirmed: returns all mints across Foundation shared + personal collections
+    // All ERC721 mints to artist — no contract filter (proven approach)
     const allMints = [];
     let pageKey = '';
     do {
@@ -35,7 +59,7 @@ export default async function handler(req, res) {
         fromBlock: '0xB00000',
         toBlock: 'latest',
         fromAddress: '0x0000000000000000000000000000000000000000',
-        toAddress: address,
+        toAddress: resolvedAddress,
         category: ['erc721'],
         withMetadata: false,
         excludeZeroValue: false,
@@ -51,7 +75,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ nfts: [], count: 0 });
     }
 
-    // Group tokenIds by contract
+    // Group by contract
     const byContract = new Map();
     for (const tx of allMints) {
       const contract = tx.rawContract?.address?.toLowerCase();
@@ -63,14 +87,12 @@ export default async function handler(req, res) {
       byContract.get(contract).add(tokenId);
     }
 
-    // Personal collection contracts (everything except the shared contract)
     const personalContracts = [...byContract.keys()].filter(c => c !== SHARED);
     const collectionOwners = {};
 
-    // Process personal collections in parallel batches of 5
+    // Enumerate all tokens in personal collections (batches of 5)
     for (let i = 0; i < personalContracts.length; i += 5) {
       await Promise.all(personalContracts.slice(i, i + 5).map(async contract => {
-        // Get ALL tokens in collection (held + listed + sold)
         let startToken = '';
         let hasMore = true;
         while (hasMore) {
@@ -87,7 +109,6 @@ export default async function handler(req, res) {
           hasMore = !!data?.nextToken;
         }
 
-        // Get ownership for status detection
         try {
           const od = await fetchJSON(
             `${NFT}/getOwnersForContract?contractAddress=${contract}&withTokenBalances=true`
@@ -103,7 +124,7 @@ export default async function handler(req, res) {
       }));
     }
 
-    // Apply status to personal collection tokens
+    // Apply status
     for (const [, nft] of results.entries()) {
       const owners = collectionOwners[nft.contract];
       if (!owners) continue;
@@ -127,16 +148,18 @@ export default async function handler(req, res) {
         } catch {
           results.set(key, {
             title: `Token #${tokenId}`, tokenId, contract: SHARED,
-            chain: 'eth', cid_meta: null, cid_media: null, image: null, status: 'unknown',
+            chain: 'eth', cid_meta: null, cid_media: null,
+            has_cid: false, display_cid: null, image: null, status: 'unknown',
           });
         }
       }));
     }
 
-    // Status for shared contract tokens
+    // Status for shared contract
     try {
       const heldData = await fetchJSON(
-        `${NFT}/getNFTsForOwner?owner=${address}&contractAddresses[]=${SHARED}&withMetadata=false&limit=100`
+        `${NFT}/getNFTsForOwner?owner=${encodeURIComponent(resolvedAddress)}`
+        + `&contractAddresses[]=${SHARED}&withMetadata=false&limit=100`
       );
       const heldIds = new Set((heldData?.ownedNfts || []).map(n => n.tokenId));
       for (const tokenId of sharedIds) {
@@ -156,14 +179,43 @@ export default async function handler(req, res) {
   }
 }
 
+// ChatGPT's verified CID regex — handles CIDv0 (Qm) and CIDv1 (b...)
+const CID_RE = /(?:^|\/)(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})(?=$|[/?#])/i;
+
+function extractCID(uri) {
+  if (!uri) return null;
+  if (typeof uri === 'object') uri = uri.raw || uri.gateway || '';
+  if (!uri) return null;
+
+  // ipfs://Qm... or ipfs://bafy...
+  if (uri.startsWith('ipfs://')) {
+    const v = uri.slice(7).split(/[/?#]/)[0];
+    if (!v) return null;
+    // Validate: must look like a real CID (Qm... v0 or b... v1)
+    if (/^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})$/i.test(v)) return v;
+    // Accept other long-form identifiers as a fallback
+    return v.length >= 46 ? v : null;
+  }
+
+  // .../ipfs/{CID}
+  const ipfsMatch = uri.match(
+    /\/ipfs\/(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})(?=$|[/?#])/i
+  );
+  if (ipfsMatch) return ipfsMatch[1];
+
+  // Bare CID in URL (Foundation CDN, etc.)
+  const cidMatch = uri.match(CID_RE);
+  if (cidMatch) return cidMatch[1];
+
+  return null;
+}
+
 function fmtNFT(nft, contractFallback, tokenIdFallback) {
-  // Try every possible URI field Foundation might use for metadata CID
   const metaCID = extractCID(nft.tokenUri?.raw)
     || extractCID(nft.tokenUri?.gateway)
     || extractCID(nft.rawMetadata?.metadata_url)
     || null;
 
-  // Try every possible field for media CID
   const mediaCID = extractCID(nft.rawMetadata?.image)
     || extractCID(nft.rawMetadata?.animation_url)
     || extractCID(nft.media?.[0]?.uri)
@@ -172,6 +224,7 @@ function fmtNFT(nft, contractFallback, tokenIdFallback) {
     || extractCID(nft.image?.cachedUrl)
     || null;
 
+  const hasCid = Boolean(metaCID || mediaCID);
   return {
     title: nft.name || nft.rawMetadata?.name || `Token #${nft.tokenId || tokenIdFallback}`,
     tokenId: nft.tokenId || tokenIdFallback,
@@ -179,25 +232,11 @@ function fmtNFT(nft, contractFallback, tokenIdFallback) {
     chain: 'eth',
     cid_meta: metaCID,
     cid_media: mediaCID,
+    has_cid: hasCid,
+    display_cid: metaCID || mediaCID || null,
     image: nft.image?.cachedUrl || nft.image?.originalUrl || null,
     status: 'unknown',
   };
-}
-
-function extractCID(uri) {
-  if (!uri) return null;
-  if (typeof uri === 'object') uri = uri.raw || uri.gateway || '';
-  if (!uri) return null;
-  // ipfs://Qm... or ipfs://bafy...
-  if (uri.startsWith('ipfs://')) return uri.replace('ipfs://', '').split('/')[0];
-  // .../ipfs/Qm... or .../ipfs/bafy...
-  const m1 = uri.match(/\/ipfs\/([a-zA-Z0-9]{20,})/);
-  if (m1) return m1[1];
-  // Foundation CDN: d2ybmb80bbm9ts.cloudfront.net/XX/YY/QmXXX/nft.jpg
-  // The CID is the long alphanumeric path segment (Qm = CIDv0, bafy = CIDv1)
-  const m2 = uri.match(/\/(Qm[a-zA-Z0-9]{40,}|bafy[a-zA-Z0-9]{40,}|bafk[a-zA-Z0-9]{40,})/);
-  if (m2) return m2[1];
-  return null;
 }
 
 async function rpc(url, method, params) {
