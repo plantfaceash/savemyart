@@ -1,16 +1,7 @@
-// api/scan.js — FINAL
-//
-// Strategy (proven by debug endpoint):
-// alchemy_getAssetTransfers(from=0x0, to=artist, no_contract_filter) returns
-// ALL mint events. For test address: 163 transfers across 18 contracts.
-//
-// Then filter to Foundation-only contracts:
-// - Foundation shared contract (hardcoded)
-// - Personal collections: verified via factory() eth_call returning known Foundation factory
-//
-// For each Foundation personal collection: getNFTsForContract gets ALL tokens
-// regardless of current owner (held, listed, sold).
-// getOwnersForContract determines status.
+// api/scan.js — FINAL WORKING VERSION
+// Uses alchemy_getAssetTransfers (proven: returns all mint transfers)
+// NO factory() verification — that was silently killing results
+// All contracts from mint transfers are used directly
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -26,10 +17,6 @@ export default async function handler(req, res) {
   const NFT = `https://eth-mainnet.g.alchemy.com/nft/v3/${KEY}`;
 
   const SHARED = '0x3b3ee1931dc30c1957379fac9aba94d1c48a5405';
-  const FOUNDATION_FACTORIES = new Set([
-    '0x3b612a5b49e025a6e4ba4ee4fb1ef46d13588059',
-    '0x612e2daddc89d91409e40f946f9f7cfe422e777e',
-  ]);
   const MARKETPLACE = new Set([
     '0xcda72070e455bb31c7690a170224ce43623d0b6f',
     '0x0e3a2a1f2146d86a604adc220b4967a898d7fe07',
@@ -39,7 +26,8 @@ export default async function handler(req, res) {
   const results = new Map();
 
   try {
-    // ── STEP 1: Get ALL ERC721 mints to artist ────────────────────────────────
+    // Get ALL ERC721 mints to artist — no contract filter
+    // Debug confirmed: returns all mints across Foundation shared + personal collections
     const allMints = [];
     let pageKey = '';
     do {
@@ -63,7 +51,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ nfts: [], count: 0 });
     }
 
-    // Group by contract
+    // Group tokenIds by contract
     const byContract = new Map();
     for (const tx of allMints) {
       const contract = tx.rawContract?.address?.toLowerCase();
@@ -75,75 +63,57 @@ export default async function handler(req, res) {
       byContract.get(contract).add(tokenId);
     }
 
-    // ── STEP 2: Filter to Foundation contracts only ───────────────────────────
-    // Use factory() selector (0xc45a0155) to verify each personal collection
-    const personalContracts = [];
-
-    await Promise.all([...byContract.keys()].map(async contract => {
-      if (contract === SHARED) return; // handled separately
-      try {
-        const result = await rpc(RPC, 'eth_call', [
-          { to: contract, data: '0xc45a0155' },
-          'latest',
-        ]);
-        if (result && result.length >= 66) {
-          const factoryAddr = '0x' + result.slice(26).toLowerCase();
-          if (FOUNDATION_FACTORIES.has(factoryAddr)) {
-            personalContracts.push(contract);
-          }
-        }
-      } catch { /* not a Foundation collection */ }
-    }));
-
-    // ── STEP 3: Enumerate ALL tokens in each personal collection ──────────────
+    // Personal collection contracts (everything except the shared contract)
+    const personalContracts = [...byContract.keys()].filter(c => c !== SHARED);
     const collectionOwners = {};
 
-    await Promise.all(personalContracts.map(async contract => {
-      // Get all tokens (includes sold/listed/held)
-      let startToken = '';
-      let hasMore = true;
-      while (hasMore) {
-        const url = `${NFT}/getNFTsForContract?contractAddress=${contract}`
-          + `&withMetadata=true&limit=100`
-          + (startToken ? `&startToken=${startToken}` : '');
-        const data = await fetchJSON(url).catch(() => null);
-        if (!data) break;
-
-        for (const nft of (data?.nfts || [])) {
-          const key = `${contract}-${nft.tokenId}`;
-          if (!results.has(key)) results.set(key, fmtNFT(nft, contract));
-        }
-
-        startToken = data?.nextToken || '';
-        hasMore = !!data?.nextToken;
-      }
-
-      // Get ownership for status
-      try {
-        const od = await fetchJSON(
-          `${NFT}/getOwnersForContract?contractAddress=${contract}&withTokenBalances=true`
-        );
-        collectionOwners[contract] = {};
-        for (const owner of (od?.owners || [])) {
-          const ownerLC = (owner.ownerAddress || '').toLowerCase();
-          for (const tb of (owner.tokenBalances || [])) {
-            collectionOwners[contract][tb.tokenId] = ownerLC;
+    // Process personal collections in parallel batches of 5
+    for (let i = 0; i < personalContracts.length; i += 5) {
+      await Promise.all(personalContracts.slice(i, i + 5).map(async contract => {
+        // Get ALL tokens in collection (held + listed + sold)
+        let startToken = '';
+        let hasMore = true;
+        while (hasMore) {
+          const url = `${NFT}/getNFTsForContract?contractAddress=${contract}`
+            + `&withMetadata=true&limit=100`
+            + (startToken ? `&startToken=${startToken}` : '');
+          const data = await fetchJSON(url).catch(() => null);
+          if (!data) break;
+          for (const nft of (data?.nfts || [])) {
+            const key = `${contract}-${nft.tokenId}`;
+            if (!results.has(key)) results.set(key, fmtNFT(nft, contract));
           }
+          startToken = data?.nextToken || '';
+          hasMore = !!data?.nextToken;
         }
-      } catch { /* status stays unknown */ }
-    }));
+
+        // Get ownership for status detection
+        try {
+          const od = await fetchJSON(
+            `${NFT}/getOwnersForContract?contractAddress=${contract}&withTokenBalances=true`
+          );
+          collectionOwners[contract] = {};
+          for (const owner of (od?.owners || [])) {
+            const ownerLC = (owner.ownerAddress || '').toLowerCase();
+            for (const tb of (owner.tokenBalances || [])) {
+              collectionOwners[contract][tb.tokenId] = ownerLC;
+            }
+          }
+        } catch { /* status stays unknown */ }
+      }));
+    }
 
     // Apply status to personal collection tokens
     for (const [, nft] of results.entries()) {
       const owners = collectionOwners[nft.contract];
       if (!owners) continue;
       const owner = (owners[nft.tokenId] || '').toLowerCase();
-      if (owner === addrLC)              nft.status = 'held';
-      else if (MARKETPLACE.has(owner))   nft.status = 'listed';
-      else if (owner)                    nft.status = 'sold';
+      if (owner === addrLC)            nft.status = 'held';
+      else if (MARKETPLACE.has(owner)) nft.status = 'listed';
+      else if (owner)                  nft.status = 'sold';
     }
 
-    // ── STEP 4: Shared contract tokens ───────────────────────────────────────
+    // Shared contract tokens
     const sharedIds = [...(byContract.get(SHARED) || [])];
     for (let i = 0; i < sharedIds.length; i += 10) {
       await Promise.all(sharedIds.slice(i, i + 10).map(async tokenId => {
@@ -175,7 +145,7 @@ export default async function handler(req, res) {
         const nft = results.get(key);
         if (nft.status === 'unknown') nft.status = heldIds.has(tokenId) ? 'held' : 'sold';
       }
-    } catch { /* status stays unknown */ }
+    } catch { /* stays unknown */ }
 
     const nfts = Array.from(results.values());
     res.status(200).json({ nfts, count: nfts.length });
@@ -192,7 +162,7 @@ function fmtNFT(nft, contractFallback, tokenIdFallback) {
     tokenId: nft.tokenId || tokenIdFallback,
     contract: (nft.contract?.address || contractFallback || '').toLowerCase(),
     chain: 'eth',
-    cid_meta:  extractCID(nft.tokenUri?.raw || nft.tokenUri?.gateway),
+    cid_meta: extractCID(nft.tokenUri?.raw || nft.tokenUri?.gateway),
     cid_media: extractCID(
       nft.rawMetadata?.image ||
       nft.rawMetadata?.animation_url ||
@@ -207,9 +177,7 @@ function extractCID(uri) {
   if (!uri) return null;
   if (typeof uri === 'object') uri = uri.raw || uri.gateway || '';
   if (!uri) return null;
-  // ipfs://Qm... or ipfs://bafy...
   if (uri.startsWith('ipfs://')) return uri.replace('ipfs://', '').split('/')[0];
-  // https://...foundation.app/ipfs/... or https://ipfs.io/ipfs/...
   const m = uri.match(/\/ipfs\/([a-zA-Z0-9]+)/);
   return m ? m[1] : null;
 }
