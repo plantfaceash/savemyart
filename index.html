@@ -653,6 +653,7 @@ function doRescue(){
       <div class="sring"></div>
       <div class="stext">Scanning all Foundation contracts for <span class="saddr">${sh}</span></div>
       <div style="font-family:var(--mono);font-size:11px;color:var(--t2);margin-top:3px">[read-only] [no gas] [no signing]</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--t2);margin-top:6px;opacity:.6">Large collections may take a minute. Worth the wait.</div>
       <div class="ssteps">${STEPS.map((s,i)=>`<div class="sstep" id="ss${i}"><span class="si">...</span>${s}</div>`).join('')}</div>
     </div>`;
 
@@ -1178,6 +1179,14 @@ window.addEventListener('scroll',()=>{
   const btn=document.getElementById('btt-btn');
   if(btn)btn.classList.toggle('visible',window.scrollY>400);
 },{ passive:true });
+
+/* FINISH SESSION WARNING */
+window.addEventListener('beforeunload',(e)=>{
+  if(pinnedCount>0&&pinnedCount<pinnableCount){
+    e.preventDefault();
+    e.returnValue='';
+  }
+});
 </script>
 
 <button class="btt" id="btt-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})">[▲] top</button>
@@ -1190,31 +1199,36 @@ window.addEventListener('scroll',()=>{
       <button class="mx" onclick="dismissResultsModal()">✕</button>
     </div>
     <div class="rmodal-body">
+      <div style="background:rgba(200,146,42,0.08);border:.5px solid rgba(200,146,42,0.3);border-radius:var(--r2);padding:14px 16px;margin-bottom:4px">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--gold);letter-spacing:.1em;margin-bottom:6px">[important]</div>
+        <p style="font-size:13px;color:var(--t0);line-height:1.65;font-weight:500">This tool does not remember your session.</p>
+        <p style="font-size:12.5px;color:var(--t1);line-height:1.65;margin-top:4px">Once you close this tab, you will need to rescan. For a permanent record, create your own free <a href="https://pinata.cloud" target="_blank" rel="noopener" style="color:var(--gold)">Pinata account</a> and pin your own copies there too.</p>
+      </div>
+      <hr class="rinfo-sep">
       <div class="rinfo-row">
         <span class="rinfo-badge sb-held">[held]</span>
-        <span class="rinfo-text"><strong>You currently own this piece.</strong> The metadata lives on Foundation's servers and needs backing up. Pin it free. No gas, no cost. Takes seconds.</span>
+        <span class="rinfo-text">You own this. Pin it free.</span>
       </div>
       <div class="rinfo-row">
         <span class="rinfo-badge sb-listed">[listed]</span>
-        <span class="rinfo-text"><strong>Listed on Foundation.</strong> You can pin the metadata now for free. To move this piece to another platform, you'll need to delist it from Foundation first. Use the Delist button on the card. Foundation is building a bulk delisting tool. Until it's live, you can also use <a href="https://cidkeeper.valipokkann.in" target="_blank" rel="noopener" style="color:var(--gold)">CIDKeeper</a>.</span>
+        <span class="rinfo-text">Listed on Foundation. Pin now, delist when ready to move platforms. Use the Delist button on the card.</span>
       </div>
       <div class="rinfo-row">
         <span class="rinfo-badge sb-sold">[sold]</span>
-        <span class="rinfo-text"><strong>A collector owns this.</strong> You can still back up the metadata. It protects your legacy and keeps the artwork reachable even after Foundation shuts down.</span>
+        <span class="rinfo-text">A collector owns this. Back up the metadata to protect your legacy.</span>
       </div>
       <div class="rinfo-row">
         <span class="rinfo-badge sb-backup">[needs backup]</span>
-        <span class="rinfo-text"><strong>Status unclear.</strong> We found this piece but couldn't confirm who holds it. Pin the metadata anyway to be safe.</span>
+        <span class="rinfo-text">Status unclear. Pin it anyway to be safe.</span>
       </div>
-      <hr class="rinfo-sep">
       <div class="rinfo-row">
         <span class="rinfo-badge" style="background:rgba(60,60,60,.8);color:#888;border:.5px solid rgba(100,100,100,.4)">[no CID]</span>
-        <span class="rinfo-text"><strong>No IPFS data found.</strong> Foundation hasn't exposed the metadata for this piece. We can't pin what we can't find. These are pushed to the bottom of your list.</span>
+        <span class="rinfo-text">No IPFS data found. Cannot pin. Pushed to the bottom of your list.</span>
       </div>
       <hr class="rinfo-sep">
       <div class="rinfo-gas">
-        Pinning is always <strong style="color:#b0ddc0">free. No gas, no cost.</strong> Delisting from Foundation requires a small on-chain gas fee.
-        <br><a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" style="color:#5dba85">Check current Ethereum gas prices ↗</a>
+        <strong style="color:#5dba85">Pinning: always free.</strong> Delisting: requires a small gas fee.
+        <a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" style="color:#5dba85;display:block;margin-top:4px">Check current gas prices ↗</a>
       </div>
     </div>
   </div>
