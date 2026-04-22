@@ -1000,7 +1000,8 @@ async function pinOne(i,cm,cv,title,total){
 function markPinned(i,title,total){
   pinned.add(i);pinnedCount++;
   const btn=document.getElementById('pin-'+i);
-  btn.textContent='[pinned]';btn.className='nb nbpin pinned';btn.style.opacity='1';
+  btn.innerHTML='<a href="https://app.pinata.cloud/pinmanager" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">[◆ saved]</a>';
+  btn.className='nb nbpin pinned';btn.style.opacity='1';btn.style.background='rgba(45,122,80,0.35)';
   document.getElementById('badge-'+i).className='sbadge sb-safe';
   document.getElementById('badge-'+i).textContent='[safe]';
   document.getElementById('card-'+i).classList.add('rescued');
@@ -1008,7 +1009,7 @@ function markPinned(i,title,total){
   const count=document.getElementById('pp-count');
   if(fill)fill.style.width=(pinnedCount/total*100)+'%';
   if(count)count.textContent=pinnedCount+' / '+total;
-  toast('[◆] "'+title+'" pinned.');
+  toast('[◆] "'+title+'" pinned to IPFS. Files secured forever.');
   const card=document.getElementById('card-'+i);
   if(card){card.dataset.status='pinned';}
   applyFilter();
