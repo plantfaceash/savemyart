@@ -138,6 +138,44 @@ h1 em{font-style:italic;color:var(--gold)}
 .rba{background:var(--gbg2);border-color:rgba(200,146,42,.25);color:var(--gold)}
 .rba:hover{background:var(--gbg)}
 
+
+/* RESULTS INFO MODAL */
+.rmodal-bg{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:1rem}
+.rmodal-bg.open{display:flex;animation:fdi .2s ease}
+.rmodal{background:var(--s1);border:.5px solid var(--b2);border-radius:var(--r3);width:100%;max-width:520px;max-height:90vh;overflow-y:auto;animation:rise .22s ease}
+.rmodal-head{padding:1.25rem 1.5rem 1rem;border-bottom:.5px solid var(--b0);display:flex;align-items:center;justify-content:space-between;gap:1rem;position:sticky;top:0;background:var(--s1);z-index:1}
+.rmodal-title{font-family:var(--mono);font-size:13px;color:var(--gold);letter-spacing:.1em}
+.rmodal-body{padding:1.25rem 1.5rem 1.75rem;display:flex;flex-direction:column;gap:1rem}
+.rinfo-row{display:flex;gap:12px;align-items:flex-start}
+.rinfo-badge{font-family:var(--mono);font-size:10px;font-weight:700;padding:3px 9px;border-radius:8px;white-space:nowrap;flex-shrink:0;margin-top:2px}
+.rinfo-text{font-size:13px;color:var(--t1);line-height:1.65}
+.rinfo-text strong{color:var(--t0);font-weight:600}
+.rinfo-sep{border:none;border-top:.5px solid var(--b0);margin:2px 0}
+.rinfo-gas{background:var(--s2);border-radius:var(--r2);padding:10px 13px;font-size:12px;color:var(--t2);line-height:1.6}
+.rinfo-gas a{color:var(--gold);text-decoration:none}
+.rinfo-gas a:hover{color:var(--gold2)}
+.reopen-btn{font-family:var(--mono);font-size:10px;padding:3px 10px;border-radius:20px;border:.5px solid var(--b1);background:transparent;color:var(--t2);cursor:pointer;transition:all .15s;white-space:nowrap}
+.reopen-btn:hover{border-color:var(--gold);color:var(--gold)}
+
+/* DELIST BAR */
+.delist-bar{background:rgba(120,75,10,0.1);border:.5px solid var(--orangeborder);border-radius:var(--r2);padding:12px 14px;margin-bottom:1rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.delist-bar-text{font-size:13px;color:#e8a040;flex:1;min-width:200px;line-height:1.5}
+.delist-bar-text strong{color:#ffd080;font-weight:600}
+.delist-btns{display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0}
+.open-fnd-btn{font-family:var(--mono);font-size:11px;padding:5px 12px;border-radius:var(--r);border:.5px solid var(--orangeborder);background:var(--orangebg);color:#e8a040;cursor:pointer;transition:all .15s;white-space:nowrap}
+.open-fnd-btn:hover{background:rgba(180,100,20,.22)}
+.nb-fnd{background:var(--orangebg);border-color:var(--orangeborder);color:#e8a040}
+.nb-fnd:hover{background:rgba(180,100,20,.22)}
+
+/* ARCHIVED SECTION */
+.archived-section{margin-top:2rem;padding-top:1.5rem;border-top:.5px solid var(--b0)}
+.archived-header{display:flex;align-items:center;gap:10px;margin-bottom:.8rem;cursor:pointer}
+.archived-title{font-family:var(--mono);font-size:12px;color:var(--t2);letter-spacing:.08em}
+.archived-toggle{font-family:var(--mono);font-size:11px;color:var(--t2);transition:transform .2s}
+.archived-section.collapsed .archived-toggle{transform:rotate(-90deg)}
+.archived-section.collapsed .archived-body{display:none}
+.archived-note{font-size:12px;color:var(--t2);margin-bottom:1rem;line-height:1.6;max-width:560px}
+
 /* FILTER BAR */
 .filter-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 0;margin-bottom:1rem;border-bottom:.5px solid var(--b0)}
 .filter-label{font-family:var(--mono);font-size:11px;color:var(--t2);margin-right:4px;letter-spacing:.06em}
@@ -373,7 +411,7 @@ footer{padding:1.4rem clamp(1rem,4vw,2.5rem);display:flex;justify-content:space-
       <span style="color:#5dba85;flex-shrink:0;margin-top:1px">✓</span>
       <div class="gastext">
         <strong>No ETH or gas required for this tool.</strong> Scanning is read-only. Pinning happens server-side via Filebase. Nothing touches the blockchain.
-        <span class="gasnote-sub">If you have active listings in Foundation's contract that you want to move elsewhere: use <a href="https://cidkeeper.valipokkann.in" target="_blank" rel="noopener" style="color:var(--gold)">CIDKeeper</a> to delist them. Each delist requires a small gas fee ($2-5) since it is an on-chain transaction. Buttons on each listed piece below will link you directly.</span>
+        <span class="gasnote-sub">If you have active listings in Foundation's contract that you want to move elsewhere: use <a href="https://cidkeeper.valipokkann.in" target="_blank" rel="noopener" style="color:var(--gold)">CIDKeeper</a> to delist them. Each delist requires a small gas fee — it's an on-chain transaction. <a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" style="color:var(--gold)">Check current gas prices ↗</a> Buttons on each listed piece below will link you directly.</span>
       </div>
     </div>
   </div>
@@ -611,65 +649,127 @@ function showResults(nfts){
   pinnedCount=0;
   pinned.clear();
   selectedCards.clear();
-  const total=nfts.length;
-  const listedCount=nfts.filter(n=>n.status==='listed').length;
-  const noCidCount=nfts.filter(n=>!n.cid_meta&&!n.cid_media).length;
 
-  // Group by contract for collection display
+  // Sort: pinnable (has CID) first, no-CID last
+  const statusOrder={held:0,listed:1,unknown:2,sold:3};
+  const withCid=nfts.filter(n=>n.cid_meta||n.cid_media).sort((a,b)=>(statusOrder[a.status]||2)-(statusOrder[b.status]||2));
+  const noCid=nfts.filter(n=>!n.cid_meta&&!n.cid_media);
+  // Rebuild currentNfts in sorted order so indices stay consistent
+  currentNfts=[...withCid,...noCid];
+  // Reassign global indices
+  currentNfts.forEach((n,i)=>n._idx=i);
+
+  const total=currentNfts.length;
+  const listedCount=currentNfts.filter(n=>n.status==='listed').length;
+  const noCidCount=noCid.length;
+  const withCidCount=withCid.length;
+
+  // Build collection groups for PINNABLE section
   const groups={};
-  nfts.forEach((n,i)=>{
-    if(!groups[n.contract])groups[n.contract]={name:n.title.replace(/ ?#\d+$/,'').trim()||'Collection',tokens:[]};
-    groups[n.contract].tokens.push({...n,idx:i});
+  withCid.forEach((n)=>{
+    const key=n.contract||'shared';
+    if(!groups[key]){
+      groups[key]={name:n.title.replace(/ ?#\d+$/,'').trim()||'Collection',tokens:[]};
+    }
+    groups[key].tokens.push(n);
   });
 
   const groupsHtml=Object.entries(groups).map(([contract,g])=>{
     const gid='grp-'+contract.slice(2,10);
-    const cards=g.tokens.map(n=>nftCard(n,n.idx,total)).join('');
-    return`<div class="coll-group" id="${gid}">
-      <div class="coll-header" onclick="toggleGroup('${gid}')">
-        <span class="coll-name">${g.name}</span>
-        <span class="coll-meta">[${g.tokens.length} piece${g.tokens.length!==1?'s':''}]</span>
-        <span class="coll-toggle">▾</span>
-      </div>
-      <div class="coll-grid">${cards}</div>
-    </div>`;
+    const cards=g.tokens.map(n=>nftCard(n,n._idx,total)).join('');
+    return '<div class="coll-group" id="'+gid+'">'+
+      '<div class="coll-header" onclick="toggleGroup(\''+gid+'\')">'+
+        '<span class="coll-name">'+g.name+'</span>'+
+        '<span class="coll-meta">['+g.tokens.length+' piece'+(g.tokens.length!==1?'s':'')+']</span>'+
+        '<span class="coll-toggle">▾</span>'+
+      '</div>'+
+      '<div class="coll-grid">'+cards+'</div>'+
+    '</div>';
   }).join('');
 
-  document.getElementById('results-area').innerHTML=`
-    <div class="reshdr">
-      <div class="resfound">
-        <h2>Found <em>${total} work${total!==1?'s':''}</em> from Foundation</h2>
-        <p>${Object.keys(groups).length} collection${Object.keys(groups).length!==1?'s':''} · Pin your metadata below to secure your backup.</p>
-      </div>
-      <div class="resacts">
-        <button class="rb rbg" id="pin-all-btn" onclick="pinAll()">Pin all free</button>
-        <button class="rb rba" onclick="selectAll()">Select all</button>
-        ${listedCount>0?`<button class="rb rbo" onclick="selectListed()">Select listed (${listedCount})</button>`:''}
-        <button class="rb rbo" onclick="dlAll()">Download all</button>
-        <button class="rb rbo" onclick="shareRescued()">
-          <svg style="width:11px;height:11px;fill:currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.73-8.835L1.254 2.25H8.08l4.259 5.629L18.244 2.25z"/></svg>
-          Share
-        </button>
-      </div>
-    </div>
-    <div class="filter-bar">
-      <span class="filter-label">filter:</span>
-      <button class="filt active green" data-filter="all" onclick="setFilter('all',this)">All (${total})</button>
-      <button class="filt" data-filter="needs-pinning" onclick="setFilter('needs-pinning',this)">Needs pinning (${total-noCidCount})</button>
-      ${listedCount>0?`<button class="filt" data-filter="listed" onclick="setFilter('listed',this)">Listed (${listedCount})</button>`:''}
-      <button class="filt" data-filter="sold" onclick="setFilter('sold',this)">Sold (${nfts.filter(n=>n.status==='sold').length})</button>
-      <button class="filt" data-filter="held" onclick="setFilter('held',this)">Held (${nfts.filter(n=>n.status==='held').length})</button>
-      ${noCidCount>0?`<button class="filt" data-filter="no-cid" onclick="setFilter('no-cid',this)">No CID (${noCidCount})</button>`:''}
-      <span class="filter-count" id="filter-count">${total} visible</span>
-    </div>
-    <div id="progress-wrap" style="display:none" class="pin-progress">
-      <div class="pp-label">Pinning your art to permanent storage...<span id="pp-count">0 / ${total}</span></div>
-      <div class="pp-bar"><div class="pp-fill" id="pp-fill"></div></div>
-    </div>
-    <div id="collections-wrap">${groupsHtml}</div>`;
+  // Build archived section for NO-CID pieces
+  const archivedGroups={};
+  noCid.forEach((n)=>{
+    const key=n.contract||'shared';
+    if(!archivedGroups[key]){
+      archivedGroups[key]={name:n.title.replace(/ ?#\d+$/,'').trim()||'Collection',tokens:[]};
+    }
+    archivedGroups[key].tokens.push(n);
+  });
+  const archivedGroupsHtml=Object.entries(archivedGroups).map(([contract,g])=>{
+    const gid='arch-'+contract.slice(2,10);
+    const cards=g.tokens.map(n=>nftCard(n,n._idx,total)).join('');
+    return '<div class="coll-group" id="'+gid+'">'+
+      '<div class="coll-header" onclick="toggleGroup(\''+gid+'\')">'+
+        '<span class="coll-name">'+g.name+'</span>'+
+        '<span class="coll-meta">['+g.tokens.length+' piece'+(g.tokens.length!==1?'s':'')+']</span>'+
+        '<span class="coll-toggle">▾</span>'+
+      '</div>'+
+      '<div class="coll-grid">'+cards+'</div>'+
+    '</div>';
+  }).join('');
+
+  const archivedSection=noCidCount>0
+    ?'<div class="archived-section" id="archived-sec">'+
+        '<div class="archived-header" onclick="document.getElementById(\'archived-sec\').classList.toggle(\'collapsed\')">'+
+          '<span class="archived-title">[no ipfs data found — '+noCidCount+' piece'+(noCidCount!==1?'s':'')+']</span>'+
+          '<span class="archived-toggle">▾</span>'+
+        '</div>'+
+        '<div class="archived-body">'+
+          '<p class="archived-note">These pieces exist on the blockchain, but Foundation hasn\'t exposed their IPFS metadata. We can\'t pin what we can\'t find. They\'re still yours on Ethereum — just not rescuable through this tool.</p>'+
+          archivedGroupsHtml+
+        '</div>'+
+      '</div>'
+    :'';
+
+  const delistBar=listedCount>0
+    ?'<div class="delist-bar">'+
+        '<div class="delist-bar-text"><strong>['+listedCount+' piece'+(listedCount!==1?'s':'')+' listed]</strong> — You can pin them now for free. To move them to another platform, delist from Foundation first. Foundation is building a bulk tool. Until then, open listings one at a time:</div>'+
+        '<div class="delist-btns">'+
+          '<button class="open-fnd-btn" onclick="openFoundationBatch(1)">Open 1</button>'+
+          '<button class="open-fnd-btn" onclick="openFoundationBatch(5)">Open 5</button>'+
+          '<button class="open-fnd-btn" onclick="openFoundationBatch(10)">Open 10</button>'+
+          '<a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" class="open-fnd-btn" style="text-decoration:none">Gas prices ↗</a>'+
+        '</div>'+
+      '</div>'
+    :'';
+
+  document.getElementById('results-area').innerHTML=
+    '<div class="reshdr">'+
+      '<div class="resfound">'+
+        '<h2>Found <em>'+total+' work'+(total!==1?'s':'')+'</em> from Foundation</h2>'+
+        '<p>'+Object.keys(groups).length+' collection'+(Object.keys(groups).length!==1?'s':'')+' · '+withCidCount+' pinnable · '+(noCidCount>0?noCidCount+' no CID · ':'')+listedCount+' listed</p>'+
+      '</div>'+
+      '<div class="resacts">'+
+        '<button class="rb rbg" id="pin-all-btn" onclick="pinAll()">Pin all free</button>'+
+        '<button class="rb rba" onclick="selectAll()">Select all</button>'+
+        (listedCount>0?'<button class="rb rbo" onclick="selectListed()">Select listed ('+listedCount+')</button>':'')+
+        '<button class="rb rbo" onclick="dlAll()">Download all</button>'+
+        '<button class="rb rbo" onclick="shareRescued()"><svg style="width:11px;height:11px;fill:currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.73-8.835L1.254 2.25H8.08l4.259 5.629L18.244 2.25z"/></svg> Share</button>'+
+        '<button class="reopen-btn" onclick="showResultsModal()" title="What does this all mean?">[?] guide</button>'+
+      '</div>'+
+    '</div>'+
+    '<div class="filter-bar">'+
+      '<span class="filter-label">filter:</span>'+
+      '<button class="filt active green" data-filter="all" onclick="setFilter(\'all\',this)">All ('+total+')</button>'+
+      '<button class="filt" data-filter="needs-pinning" onclick="setFilter(\'needs-pinning\',this)">Pinnable ('+withCidCount+')</button>'+
+      (listedCount>0?'<button class="filt" data-filter="listed" onclick="setFilter(\'listed\',this)">Listed ('+listedCount+')</button>':'')+
+      '<button class="filt" data-filter="sold" onclick="setFilter(\'sold\',this)">Sold ('+currentNfts.filter(n=>n.status==='sold').length+')</button>'+
+      '<button class="filt" data-filter="held" onclick="setFilter(\'held\',this)">Held ('+currentNfts.filter(n=>n.status==='held').length+')</button>'+
+      (noCidCount>0?'<button class="filt" data-filter="no-cid" onclick="setFilter(\'no-cid\',this)">No CID ('+noCidCount+')</button>':'')+
+      '<span class="filter-count" id="filter-count">'+total+' visible</span>'+
+    '</div>'+
+    delistBar+
+    '<div id="progress-wrap" style="display:none" class="pin-progress">'+
+      '<div class="pp-label">Pinning your art to permanent storage...<span id="pp-count">0 / '+total+'</span></div>'+
+      '<div class="pp-bar"><div class="pp-fill" id="pp-fill"></div></div>'+
+    '</div>'+
+    '<div id="collections-wrap">'+groupsHtml+'</div>'+
+    archivedSection;
 
   setTimeout(()=>document.getElementById('results-area').scrollIntoView({behavior:'smooth',block:'start'}),150);
-  setTimeout(()=>toast('['+total+' works found — '+Object.keys(groups).length+' collections]'),400);
+  setTimeout(()=>showResultsModal(),500);
+  setTimeout(()=>toast('['+total+' works found — '+Object.keys(groups).length+' collections]'),300);
 }
 
 function nftCard(n,i,total){
@@ -678,14 +778,20 @@ function nftCard(n,i,total){
   const sc={'held':'sb-held','listed':'sb-listed','sold':'sb-sold','unknown':'sb-backup'}[n.status]||'sb-backup';
   const sl={'held':'[held]','listed':'[listed]','sold':'[sold]','unknown':'[needs backup]'}[n.status]||'[needs backup]';
   const hasCid=!!(n.cid_meta||n.cid_media);
-  const cid=n.cid_meta?n.cid_meta.slice(0,24)+'...':'No CID — cannot pin';
+  const cid=n.cid_meta?n.cid_meta.slice(0,24)+'...':'No IPFS data — cannot pin';
   const img=n.image?'<img src="'+n.image+'" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0" loading="lazy">':'';
-  const delistBtn=n.status==='listed'
-    ?'<button class="nb nb-delist" onclick="cidkeeper()">Delist</button>'
-    :'<button class="nb nbeth" onclick="goEtherscan('+i+')">Etherscan</button>';
+  // Foundation delist URL: foundation.app/mint/{chain}/{contract}/{tokenId}
+  const chain=n.chain||'eth';
+  const fndUrl='https://foundation.app/mint/'+chain+'/'+n.contract+'/'+n.tokenId;
+  let lastBtn;
+  if(n.status==='listed'){
+    lastBtn='<button class="nb nb-fnd" onclick="openUrl('+i+',\''+fndUrl+'\')" title="Open this listing on Foundation to delist it">Delist on Fnd ↗</button>';
+  } else {
+    lastBtn='<button class="nb nbeth" onclick="goEtherscan('+i+')">Etherscan</button>';
+  }
   const pinBtn=hasCid
     ?'<button class="nb nbpin pulse-anim" id="pin-'+i+'" onclick="pinFromCard('+i+')">Pin free</button>'
-    :'<button class="nb nbpin" id="pin-'+i+'" disabled style="opacity:.35;cursor:not-allowed">No CID</button>';
+    :'<button class="nb nbpin" id="pin-'+i+'" disabled style="opacity:.3;cursor:not-allowed;animation:none">No CID</button>';
   return '<div class="nftcard" id="card-'+i+'"'+
     ' data-idx="'+i+'" data-total="'+total+'"'+
     ' data-status="'+(n.status||'unknown')+'"'+
@@ -694,7 +800,9 @@ function nftCard(n,i,total){
     ' data-cv="'+encodeURIComponent(n.cid_media||'')+'"'+
     ' data-title="'+encodeURIComponent(n.title||'Untitled')+'"'+
     ' data-contract="'+(n.contract||'')+'"'+
-    ' data-tokenid="'+(n.tokenId||'')+'">'+
+    ' data-tokenid="'+(n.tokenId||'')+'"'+
+    ' data-fndurl="'+encodeURIComponent(fndUrl)+'"'+
+    ' data-listed="'+(n.status==='listed'?'1':'0')+'">'+
     '<div class="nftart">'+
       '<div class="'+grad+'" style="width:100%;height:100%;position:relative">'+img+'</div>'+
       '<div class="card-select" id="sel-'+i+'" onclick="toggleSelect('+i+')" title="Select"></div>'+
@@ -707,15 +815,48 @@ function nftCard(n,i,total){
       '<div class="nftbtns">'+
         pinBtn+
         '<button class="nb nbdl" onclick="dlFromCard('+i+')">JSON</button>'+
-        delistBtn+
+        lastBtn+
       '</div>'+
     '</div>'+
   '</div>';
 }
+function getCard(i){return document.getElementById('card-'+i);}
+function pinFromCard(i){const c=getCard(i);pinOne(i,decodeURIComponent(c.dataset.cm||''),decodeURIComponent(c.dataset.cv||''),decodeURIComponent(c.dataset.title||'Untitled'),parseInt(c.dataset.total));}
+function dlFromCard(i){const c=getCard(i);dlMeta(decodeURIComponent(c.dataset.title||'Untitled'),decodeURIComponent(c.dataset.cm||''),decodeURIComponent(c.dataset.cv||''));}
+function copyCIDCard(i){const c=getCard(i);copyCID(decodeURIComponent(c.dataset.cm||''),decodeURIComponent(c.dataset.title||''));}
+function goEtherscan(i){const c=getCard(i);window.open('https://etherscan.io/token/'+c.dataset.contract+'?a='+c.dataset.tokenid,'_blank','noopener');}
+function cidkeeper(){window.open('https://cidkeeper.valipokkann.in','_blank','noopener');}
+function openUrl(i,url){window.open(url,'_blank','noopener');}
 
-/* FILTER */
+/* RESULTS INFO MODAL */
+function showResultsModal(){document.getElementById('results-modal').classList.add('open');}
+function dismissResultsModal(){document.getElementById('results-modal').classList.remove('open');}
+
+/* OPEN ON FOUNDATION - batch delist helper */
+let fndOpenedSet=new Set();
+function openFoundationBatch(count){
+  // Collect unvisited listed cards
+  const listedCards=[];
+  document.querySelectorAll('.nftcard[data-listed="1"]').forEach(card=>{
+    const i=parseInt(card.dataset.idx);
+    if(!fndOpenedSet.has(i)){listedCards.push({i,url:decodeURIComponent(card.dataset.fndurl||'')});}
+  });
+  if(listedCards.length===0){toast('All listed pieces have already been opened.');return;}
+  const toOpen=listedCards.slice(0,count);
+  if(toOpen.length===0){toast('No listed pieces to open.');return;}
+  if(count>1){
+    const ok=confirm('This will open '+toOpen.length+' Foundation tab'+(toOpen.length>1?'s':'')+'. Foundation pages are heavy — your browser may slow down temporarily. Continue?');
+    if(!ok)return;
+  }
+  toOpen.forEach(({i,url})=>{
+    if(url){window.open(url,'_blank','noopener');fndOpenedSet.add(i);}
+  });
+  toast('Opened '+toOpen.length+' listing'+(toOpen.length>1?'s':'')+' on Foundation');
+}
+
+/* FILTER + GROUP */
 let activeFilter='all';
-function setFilter(f, btn){
+function setFilter(f,btn){
   activeFilter=f;
   document.querySelectorAll('.filt').forEach(b=>{b.classList.remove('active','green');});
   btn.classList.add('active');
@@ -740,19 +881,10 @@ function applyFilter(){
   const fc=document.getElementById('filter-count');
   if(fc)fc.textContent=visible+' visible';
 }
-
-/* COLLECTION GROUP TOGGLE */
 function toggleGroup(gid){
   const g=document.getElementById(gid);
   if(g)g.classList.toggle('collapsed');
 }
-
-function getCard(i){return document.getElementById('card-'+i);}
-function pinFromCard(i){const c=getCard(i);pinOne(i,decodeURIComponent(c.dataset.cm||''),decodeURIComponent(c.dataset.cv||''),decodeURIComponent(c.dataset.title||'Untitled'),parseInt(c.dataset.total));}
-function dlFromCard(i){const c=getCard(i);dlMeta(decodeURIComponent(c.dataset.title||'Untitled'),decodeURIComponent(c.dataset.cm||''),decodeURIComponent(c.dataset.cv||''));}
-function copyCIDCard(i){const c=getCard(i);copyCID(decodeURIComponent(c.dataset.cm||''),decodeURIComponent(c.dataset.title||''));}
-function goEtherscan(i){const c=getCard(i);window.open('https://etherscan.io/token/'+c.dataset.contract+'?a='+c.dataset.tokenid,'_blank','noopener');}
-function cidkeeper(){window.open('https://cidkeeper.valipokkann.in','_blank','noopener');}
 
 /* SELECT */
 function toggleSelect(i){
@@ -776,10 +908,10 @@ function selectAll(){
 }
 function selectListed(){
   currentNfts.forEach((n,i)=>{
-    if(n.status==='listed'){selectedCards.add(i);const el=document.getElementById('sel-'+i);if(el){el.textContent='✓';el.classList.add('checked');}}
+    if(n.status==='listed'){selectedCards.add(i);const el=document.getElementById('sel-'+n._idx!==undefined?n._idx:i);if(el){el.textContent='✓';el.classList.add('checked');}}
   });
   const count=currentNfts.filter(n=>n.status==='listed').length;
-  toast('['+count+' listed pieces selected] — Pin them and use CIDKeeper to delist');
+  toast('['+count+' listed] — Pin metadata free now. Use Delist buttons to remove from Foundation.');
 }
 
 /* PIN */
@@ -850,7 +982,7 @@ function showCompletion(total){
           <strong>${total} pieces pinned</strong> to Filebase — 3x redundant, independent of Foundation's servers.
           Your content identifiers are unchanged. Your tokens are unchanged.
           Now <strong>you control the infrastructure, not a platform that can disappear.</strong>
-          ${listedCount>0?`<br><br><strong>${listedCount} pieces are still listed</strong> on Foundation. To move them to a new platform, use <a href="https://cidkeeper.valipokkann.in" target="_blank" rel="noopener" style="color:var(--gold)">CIDKeeper</a> to delist them first. Each delist requires a small gas fee.`:''}
+          ${listedCount>0?`<br><br><strong>${listedCount} pieces are still listed</strong> on Foundation. To move them to a new platform, delist them directly on Foundation using the Delist button on each card. Foundation is building a bulk tool. <a href="https://cidkeeper.valipokkann.in" target="_blank" rel="noopener" style="color:var(--gold)">CIDKeeper</a> is also available now. Each delist requires a small gas fee — <a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" style="color:var(--gold)">check current prices ↗</a>`:''}
         </p>
         <div class="completion-stats">
           <div class="cstat"><span class="cstat-n">${total}</span><span class="cstat-l">Works pinned</span></div>
@@ -911,5 +1043,44 @@ function toast(msg){
   setTimeout(()=>{t.style.transition='opacity .3s';t.style.opacity='0';},2800);setTimeout(()=>t.remove(),3200);
 }
 </script>
+
+<!-- RESULTS INFO MODAL -->
+<div class="rmodal-bg" id="results-modal" onclick="if(event.target===this)dismissResultsModal()">
+  <div class="rmodal">
+    <div class="rmodal-head">
+      <span class="rmodal-title">[what are you looking at?]</span>
+      <button class="mx" onclick="dismissResultsModal()">✕</button>
+    </div>
+    <div class="rmodal-body">
+      <div class="rinfo-row">
+        <span class="rinfo-badge sb-held">[held]</span>
+        <span class="rinfo-text"><strong>You currently own this piece.</strong> The metadata lives on Foundation's servers and needs backing up. Pin it free — no gas, no cost, takes seconds.</span>
+      </div>
+      <div class="rinfo-row">
+        <span class="rinfo-badge sb-listed">[listed]</span>
+        <span class="rinfo-text"><strong>Listed on Foundation.</strong> You can pin the metadata now for free. To move this piece to another platform, you'll need to delist it from Foundation first — use the Delist button on the card. Foundation is building a bulk delisting tool. Until it's live, you can also use <a href="https://cidkeeper.valipokkann.in" target="_blank" rel="noopener" style="color:var(--gold)">CIDKeeper</a>.</span>
+      </div>
+      <div class="rinfo-row">
+        <span class="rinfo-badge sb-sold">[sold]</span>
+        <span class="rinfo-text"><strong>A collector owns this.</strong> You can still back up the metadata — it protects your legacy and keeps the artwork reachable even after Foundation shuts down.</span>
+      </div>
+      <div class="rinfo-row">
+        <span class="rinfo-badge sb-backup">[needs backup]</span>
+        <span class="rinfo-text"><strong>Status unclear.</strong> We found this piece but couldn't confirm who holds it. Pin the metadata anyway to be safe.</span>
+      </div>
+      <hr class="rinfo-sep">
+      <div class="rinfo-row">
+        <span class="rinfo-badge" style="background:rgba(60,60,60,.8);color:#888;border:.5px solid rgba(100,100,100,.4)">[no CID]</span>
+        <span class="rinfo-text"><strong>No IPFS data found.</strong> Foundation hasn't exposed the metadata for this piece. We can't pin what we can't find. These are pushed to the bottom of your list.</span>
+      </div>
+      <hr class="rinfo-sep">
+      <div class="rinfo-gas">
+        Pinning is always <strong style="color:#b0ddc0">free — no gas, no cost.</strong> Delisting from Foundation requires a small on-chain gas fee.
+        <br><a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener">Check current Ethereum gas prices ↗</a>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
