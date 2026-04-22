@@ -157,17 +157,28 @@ export default async function handler(req, res) {
 }
 
 function fmtNFT(nft, contractFallback, tokenIdFallback) {
+  // Try every possible URI field Foundation might use for metadata CID
+  const metaCID = extractCID(nft.tokenUri?.raw)
+    || extractCID(nft.tokenUri?.gateway)
+    || extractCID(nft.rawMetadata?.metadata_url)
+    || null;
+
+  // Try every possible field for media CID
+  const mediaCID = extractCID(nft.rawMetadata?.image)
+    || extractCID(nft.rawMetadata?.animation_url)
+    || extractCID(nft.media?.[0]?.uri)
+    || extractCID(nft.media?.[0]?.raw)
+    || extractCID(nft.image?.originalUrl)
+    || extractCID(nft.image?.cachedUrl)
+    || null;
+
   return {
     title: nft.name || nft.rawMetadata?.name || `Token #${nft.tokenId || tokenIdFallback}`,
     tokenId: nft.tokenId || tokenIdFallback,
     contract: (nft.contract?.address || contractFallback || '').toLowerCase(),
     chain: 'eth',
-    cid_meta: extractCID(nft.tokenUri?.raw || nft.tokenUri?.gateway),
-    cid_media: extractCID(
-      nft.rawMetadata?.image ||
-      nft.rawMetadata?.animation_url ||
-      nft.media?.[0]?.uri
-    ),
+    cid_meta: metaCID,
+    cid_media: mediaCID,
     image: nft.image?.cachedUrl || nft.image?.originalUrl || null,
     status: 'unknown',
   };
@@ -177,9 +188,16 @@ function extractCID(uri) {
   if (!uri) return null;
   if (typeof uri === 'object') uri = uri.raw || uri.gateway || '';
   if (!uri) return null;
+  // ipfs://Qm... or ipfs://bafy...
   if (uri.startsWith('ipfs://')) return uri.replace('ipfs://', '').split('/')[0];
-  const m = uri.match(/\/ipfs\/([a-zA-Z0-9]+)/);
-  return m ? m[1] : null;
+  // .../ipfs/Qm... or .../ipfs/bafy...
+  const m1 = uri.match(/\/ipfs\/([a-zA-Z0-9]{20,})/);
+  if (m1) return m1[1];
+  // Foundation CDN: d2ybmb80bbm9ts.cloudfront.net/XX/YY/QmXXX/nft.jpg
+  // The CID is the long alphanumeric path segment (Qm = CIDv0, bafy = CIDv1)
+  const m2 = uri.match(/\/(Qm[a-zA-Z0-9]{40,}|bafy[a-zA-Z0-9]{40,}|bafk[a-zA-Z0-9]{40,})/);
+  if (m2) return m2[1];
+  return null;
 }
 
 async function rpc(url, method, params) {
