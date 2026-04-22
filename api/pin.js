@@ -1,6 +1,7 @@
 // api/pin.js
-// Fixed: Filebase IPFS Pinning Service uses Bearer accessKey:secretKey
-// NOT the bucket-scoped IPFS RPC token — that was the bug causing all pin failures
+// Auth: Bearer FILEBASE_IPFS_TOKEN (bucket-scoped IPFS pinning token)
+// This is the token from Filebase dashboard > Buckets > savemyart-pins > IPFS RPC section
+// NOT the access key:secret key combo — that's for S3, not IPFS pinning
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,50 +11,61 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const ACCESS_TOKEN = process.env.FILEBASE_ACCESS_TOKEN;
-  const SECRET_KEY   = process.env.FILEBASE_SECRET_KEY;
-
-  if (!ACCESS_TOKEN || !SECRET_KEY) {
+  const IPFS_TOKEN = process.env.FILEBASE_IPFS_TOKEN;
+  if (!IPFS_TOKEN) {
+    console.error('FILEBASE_IPFS_TOKEN not set');
     return res.status(500).json({ error: 'Pinning not configured' });
   }
 
-  // Filebase IPFS Pinning Service API auth format: Bearer accessKey:secretKey
-  const authHeader = `Bearer ${ACCESS_TOKEN}:${SECRET_KEY}`;
-
-  const { cidMeta, cidMedia, name } = req.body;
+  const { cidMeta, cidMedia, name } = req.body || {};
   if (!cidMeta && !cidMedia) {
-    return res.status(400).json({ error: 'No CID to pin' });
+    return res.status(400).json({ error: 'No CID provided' });
   }
 
   const pinCID = async (cid, pinName) => {
     if (!cid) return { success: true, skipped: true };
-    const response = await fetch('https://api.filebase.io/v1/ipfs/pins', {
-      method: 'POST',
-      headers: {
-        'Authorization': authHeader,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ cid, name: pinName }),
-    });
-    if (response.ok || response.status === 202) {
-      const data = await response.json().catch(() => ({}));
-      return { success: true, requestid: data.requestid };
+    try {
+      const response = await fetch('https://api.filebase.io/v1/ipfs/pins', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${IPFS_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cid, name: pinName }),
+      });
+      // 200 = already pinned, 202 = queued/in progress — both are success
+      if (response.ok || response.status === 202) {
+        const data = await response.json().catch(() => ({}));
+        return { success: true, requestid: data.requestid };
+      }
+      const errText = await response.text().catch(() => 'Unknown error');
+      console.error(`Pin failed [${response.status}]:`, errText);
+      return { success: false, error: `Filebase ${response.status}: ${errText}` };
+    } catch (err) {
+      console.error('Pin fetch error:', err.message);
+      return { success: false, error: err.message };
     }
-    const errText = await response.text().catch(() => 'Unknown error');
-    console.error(`Pin failed [${response.status}]:`, errText);
-    return { success: false, error: `Filebase error ${response.status}: ${errText}` };
   };
 
   try {
-    const safeName = (name || 'untitled').replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().slice(0, 64);
+    const safeName = (name || 'untitled')
+      .replace(/[^a-zA-Z0-9\s\-_]/g, '')
+      .trim()
+      .slice(0, 64) || 'untitled';
+
     const [metaResult, mediaResult] = await Promise.all([
-      pinCID(cidMeta,  `${safeName}-metadata`),
+      pinCID(cidMeta, `${safeName}-metadata`),
       pinCID(cidMedia, `${safeName}-media`),
     ]);
+
     const success = metaResult.success && mediaResult.success;
-    res.status(success ? 200 : 500).json({ success, meta: metaResult, media: mediaResult });
+    res.status(success ? 200 : 500).json({
+      success,
+      meta: metaResult,
+      media: mediaResult,
+    });
   } catch (err) {
-    console.error('Pin error:', err);
+    console.error('Pin handler error:', err);
     res.status(500).json({ error: err.message });
   }
 }
