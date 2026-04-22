@@ -1,6 +1,5 @@
-// api/pin.js — Pinata
-// Free tier, stable, no UCAN nonsense, just works
-// Auth: Bearer JWT from pinata.cloud → API Keys
+// api/pin.js — Pinata V3 API
+// Uses /pinning/pinByHash which works with the JWT from V3 keys
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -21,10 +20,34 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'No CID provided' });
   }
 
+  const safeName = (name || 'untitled')
+    .replace(/[^a-zA-Z0-9\s\-_]/g, '')
+    .trim()
+    .slice(0, 64) || 'untitled';
+
   const pinCID = async (cid, pinName) => {
     if (!cid) return { success: true, skipped: true };
     try {
-      const response = await fetch('https://api.pinata.cloud/pinning/pinByHash', {
+      // Pinata V3 pin by CID endpoint
+      const response = await fetch('https://api.pinata.cloud/v3/files/pin', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${JWT}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cid,
+          name: pinName,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        return { success: true, id: data?.data?.id };
+      }
+
+      // Fall back to V2 endpoint if V3 fails
+      const v2response = await fetch('https://api.pinata.cloud/pinning/pinByHash', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${JWT}`,
@@ -35,13 +58,16 @@ export default async function handler(req, res) {
           pinataMetadata: { name: pinName },
         }),
       });
-      if (response.ok) {
-        const data = await response.json().catch(() => ({}));
+
+      if (v2response.ok) {
+        const data = await v2response.json().catch(() => ({}));
         return { success: true, id: data.id };
       }
-      const errText = await response.text().catch(() => 'Unknown error');
-      console.error(`Pinata failed [${response.status}]:`, errText);
-      return { success: false, status: response.status, error: errText };
+
+      const errText = await v2response.text().catch(() => 'Unknown error');
+      console.error(`Pinata failed [${v2response.status}]:`, errText);
+      return { success: false, status: v2response.status, error: errText };
+
     } catch (err) {
       console.error('Pin fetch error:', err.message);
       return { success: false, error: err.message };
@@ -49,11 +75,6 @@ export default async function handler(req, res) {
   };
 
   try {
-    const safeName = (name || 'untitled')
-      .replace(/[^a-zA-Z0-9\s\-_]/g, '')
-      .trim()
-      .slice(0, 64) || 'untitled';
-
     const [metaResult, mediaResult] = await Promise.all([
       pinCID(cidMeta,  `${safeName}-metadata`),
       pinCID(cidMedia, `${safeName}-media`),
