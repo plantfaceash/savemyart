@@ -1,14 +1,12 @@
-// api/scan.js — CLEAN ACCURATE VERSION
+// api/scan.js — TOKEN-LEVEL PRECISION
 //
-// Core principle: only show NFTs that were MINTED BY this wallet
+// The ONLY source of truth: ERC721 transfer events where
+//   from = 0x000...000 (zero address = mint)
+//   to   = wallet
 //
-// Step 1: alchemy_getAssetTransfers(from=0x0, to=wallet) — mint events only
-// Step 2: Group specific tokenIds by contract address
-// Step 3: Verify each personal collection is Foundation via factory() eth_call
-//         (NOT getNFTsForContract — that was pulling unrelated tokens)
-// Step 4: Fetch metadata only for the specific minted tokenIds
-// Step 5: Get current owner per token via ownerOf() eth_call
-// Step 6: Assign status: held / listed / sold / unknown
+// From those events we get exact (contract, tokenId) pairs.
+// We ONLY show those pairs. Nothing else. Ever.
+// No collection expansion. No factory checks. No getNFTsForContract.
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -51,27 +49,23 @@ export default async function handler(req, res) {
 
   const addrLC = resolvedAddress.toLowerCase();
 
-  // Known Foundation contracts
+  // Known Foundation contracts — used only for shared contract handling
   const SHARED = '0x3b3ee1931dc30c1957379fac9aba94d1c48a5405';
-  const FOUNDATION_FACTORIES = new Set([
-    '0x3b612a5b49e025a6e4ba4ee4fb1ef46d13588059',
-    '0x612e2daddc89d91409e40f946f9f7cfe422e777e',
-  ]);
+
+  // Known Foundation marketplace/escrow contracts
   const MARKETPLACE = new Set([
     '0xcda72070e455bb31c7690a170224ce43623d0b6f',
     '0x0e3a2a1f2146d86a604adc220b4967a898d7fe07',
   ]);
 
-  // ABI selectors
-  const FACTORY_SELECTOR = '0xc45a0155'; // factory()
-  const OWNER_OF_SELECTOR = '0x6352211e'; // ownerOf(uint256)
-
-  const results = new Map();
+  // ownerOf(uint256) ABI selector
+  const OWNER_OF = '0x6352211e';
 
   try {
-    // ── STEP 1: Get ALL ERC721 mints to this wallet ──────────────────────────
-    // from=0x0 means minted directly to wallet — authoritative source
-    const allMints = [];
+    // ── STAGE 1: Get exact minted (contract, tokenId) pairs ─────────────────
+    // from=0x0 AND to=wallet = tokens minted directly to this wallet
+    // This is the ONLY signal of "minted by this wallet"
+    const mintedTokens = []; // [{contract, tokenId}]
     let pageKey = '';
     do {
       const params = {
@@ -86,154 +80,82 @@ export default async function handler(req, res) {
       };
       if (pageKey) params.pageKey = pageKey;
       const data = await rpc(RPC, 'alchemy_getAssetTransfers', [params]);
-      allMints.push(...(data?.transfers || []));
+      for (const tx of (data?.transfers || [])) {
+        const contract = tx.rawContract?.address?.toLowerCase();
+        if (!contract) continue;
+        const rawId = tx.erc721TokenId || tx.tokenId;
+        const tokenId = rawId ? parseInt(rawId, 16).toString() : null;
+        if (!tokenId) continue;
+        mintedTokens.push({ contract, tokenId });
+      }
       pageKey = data?.pageKey || '';
     } while (pageKey);
 
-    if (allMints.length === 0) {
+    if (mintedTokens.length === 0) {
       return res.status(200).json({ nfts: [], count: 0 });
     }
 
-    // ── STEP 2: Group SPECIFIC minted tokenIds by contract ───────────────────
-    // Only the exact tokens minted to this wallet — not the full collection
-    const byContract = new Map();
-    for (const tx of allMints) {
-      const contract = tx.rawContract?.address?.toLowerCase();
-      if (!contract) continue;
-      const rawId = tx.erc721TokenId || tx.tokenId;
-      const tokenId = rawId ? parseInt(rawId, 16).toString() : null;
-      if (!tokenId) continue;
-      if (!byContract.has(contract)) byContract.set(contract, new Set());
-      byContract.get(contract).add(tokenId);
-    }
+    // Deduplicate — same token can appear if transferred back and reminted
+    const seen = new Set();
+    const uniqueTokens = mintedTokens.filter(({ contract, tokenId }) => {
+      const key = `${contract}-${tokenId}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
-    // ── STEP 3: Filter to Foundation contracts only ──────────────────────────
-    // Verify each personal collection via factory() eth_call
-    // This runs in parallel — no eth_getLogs, so no free-tier limit issues
-    const personalContracts = [];
-    await Promise.all(
-      [...byContract.keys()]
-        .filter(c => c !== SHARED)
-        .map(async contract => {
-          try {
-            const result = await rpc(RPC, 'eth_call', [
-              { to: contract, data: FACTORY_SELECTOR },
-              'latest',
-            ]);
-            if (result && result.length >= 66) {
-              const factoryAddr = '0x' + result.slice(26).toLowerCase();
-              if (FOUNDATION_FACTORIES.has(factoryAddr)) {
-                personalContracts.push(contract);
-              }
-              // Not a Foundation contract — silently skip
-            }
-          } catch {
-            // eth_call failed — not a valid contract or not Foundation
-          }
-        })
-    );
+    // ── STAGE 2: Enrich — fetch metadata for exact tokens only ──────────────
+    // One getNFTMetadata call per token. No collection expansion.
+    const results = new Map();
 
-    // ── STEP 4: Fetch metadata for ONLY the minted tokenIds ─────────────────
-    // NOT getNFTsForContract (returns entire collection)
-    // Instead: one getNFTMetadata call per specific minted token
-    for (let i = 0; i < personalContracts.length; i += 5) {
-      const batch = personalContracts.slice(i, i + 5);
-      await Promise.all(batch.map(async contract => {
-        const tokenIds = [...(byContract.get(contract) || [])];
-        // Fetch metadata in sub-batches of 10
-        for (let j = 0; j < tokenIds.length; j += 10) {
-          await Promise.all(tokenIds.slice(j, j + 10).map(async tokenId => {
-            const key = `${contract}-${tokenId}`;
-            if (results.has(key)) return;
-            try {
-              const data = await fetchJSON(
-                `${NFT}/getNFTMetadata?contractAddress=${contract}&tokenId=${tokenId}`
-              );
-              results.set(key, fmtNFT(data, contract, tokenId));
-            } catch {
-              results.set(key, {
-                title: `Token #${tokenId}`, tokenId, contract,
-                chain: 'eth', cid_meta: null, cid_media: null,
-                has_cid: false, display_cid: null, image: null, status: 'unknown',
-              });
-            }
-          }));
-        }
-      }));
-    }
-
-    // ── STEP 5: Get current owner for each personal collection token ─────────
-    // ownerOf(tokenId) via eth_call — accurate per-token ownership
-    // Replaces getOwnersForContract (which we no longer call)
-    const ownerChecks = [];
-    for (const contract of personalContracts) {
-      const tokenIds = [...(byContract.get(contract) || [])];
-      for (const tokenId of tokenIds) {
-        ownerChecks.push({ contract, tokenId });
-      }
-    }
-
-    // Run owner checks in batches of 20
-    for (let i = 0; i < ownerChecks.length; i += 20) {
-      await Promise.all(ownerChecks.slice(i, i + 20).map(async ({ contract, tokenId }) => {
+    for (let i = 0; i < uniqueTokens.length; i += 20) {
+      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId }) => {
         const key = `${contract}-${tokenId}`;
-        if (!results.has(key)) return;
-        const nft = results.get(key);
-        try {
-          // ownerOf(uint256) — pad tokenId to 32 bytes
-          const tokenHex = BigInt(tokenId).toString(16).padStart(64, '0');
-          const callData = OWNER_OF_SELECTOR + tokenHex;
-          const result = await rpc(RPC, 'eth_call', [
-            { to: contract, data: callData },
-            'latest',
-          ]);
-          if (result && result.length >= 66) {
-            const owner = ('0x' + result.slice(26)).toLowerCase();
-            if (owner === addrLC)            nft.status = 'held';
-            else if (MARKETPLACE.has(owner)) nft.status = 'listed';
-            else if (owner !== '0x0000000000000000000000000000000000000000') nft.status = 'sold';
-          }
-        } catch { /* status stays unknown */ }
-      }));
-    }
-
-    // ── STEP 6: Shared contract — specific minted tokenIds only ─────────────
-    const sharedIds = [...(byContract.get(SHARED) || [])];
-    for (let i = 0; i < sharedIds.length; i += 10) {
-      await Promise.all(sharedIds.slice(i, i + 10).map(async tokenId => {
-        const key = `${SHARED}-${tokenId}`;
-        if (results.has(key)) return;
         try {
           const data = await fetchJSON(
-            `${NFT}/getNFTMetadata?contractAddress=${SHARED}&tokenId=${tokenId}`
+            `${NFT}/getNFTMetadata?contractAddress=${contract}&tokenId=${tokenId}`
           );
-          results.set(key, fmtNFT(data, SHARED, tokenId));
+          results.set(key, fmtNFT(data, contract, tokenId));
         } catch {
           results.set(key, {
-            title: `Token #${tokenId}`, tokenId, contract: SHARED,
-            chain: 'eth', cid_meta: null, cid_media: null,
-            has_cid: false, display_cid: null, image: null, status: 'unknown',
+            title: `Token #${tokenId}`,
+            tokenId,
+            contract,
+            chain: 'eth',
+            cid_meta: null,
+            cid_media: null,
+            has_cid: false,
+            display_cid: null,
+            image: null,
+            status: 'unknown',
           });
         }
       }));
     }
 
-    // Status for shared contract tokens
-    try {
-      const heldData = await fetchJSON(
-        `${NFT}/getNFTsForOwner?owner=${encodeURIComponent(resolvedAddress)}`
-        + `&contractAddresses[]=${SHARED}&withMetadata=false&limit=100`
-      );
-      const heldIds = new Set((heldData?.ownedNfts || []).map(n => n.tokenId));
-      for (const tokenId of sharedIds) {
-        const key = `${SHARED}-${tokenId}`;
-        if (!results.has(key)) continue;
+    // ── STAGE 3: Ownership — check current owner per exact token ────────────
+    // ownerOf(tokenId) via eth_call — accurate, per-token, no collection calls
+    for (let i = 0; i < uniqueTokens.length; i += 20) {
+      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId }) => {
+        const key = `${contract}-${tokenId}`;
         const nft = results.get(key);
-        if (nft.status === 'unknown') {
-          nft.status = heldIds.has(tokenId) ? 'held' : 'sold';
-        }
-      }
-    } catch { /* stays unknown */ }
+        if (!nft) return;
+        try {
+          const tokenHex = BigInt(tokenId).toString(16).padStart(64, '0');
+          const result = await rpc(RPC, 'eth_call', [
+            { to: contract, data: OWNER_OF + tokenHex },
+            'latest',
+          ]);
+          if (result && result.length >= 66) {
+            const owner = ('0x' + result.slice(26)).toLowerCase();
+            const ZERO = '0x0000000000000000000000000000000000000000';
+            if (owner === addrLC)            nft.status = 'held';
+            else if (MARKETPLACE.has(owner)) nft.status = 'listed';
+            else if (owner !== ZERO)         nft.status = 'sold';
+          }
+        } catch { /* status stays unknown */ }
+      }));
+    }
 
     const nfts = Array.from(results.values());
     res.status(200).json({ nfts, count: nfts.length });
@@ -244,7 +166,7 @@ export default async function handler(req, res) {
   }
 }
 
-// ChatGPT-verified CID regex — CIDv0 (Qm...) and CIDv1 (b...)
+// ChatGPT-verified CID regex
 const CID_RE = /(?:^|\/)(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})(?=$|[/?#])/i;
 
 function extractCID(uri) {
