@@ -1,4 +1,4 @@
-// api/scan.js — TOKEN-LEVEL PRECISION
+// api/scan.js — TOKEN-LEVEL PRECISION 
 //
 // The ONLY source of truth: ERC721 transfer events where
 //   from = 0x000...000 (zero address = mint)
