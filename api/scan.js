@@ -104,12 +104,54 @@ export default async function handler(req, res) {
       return true;
     });
 
+    // ── STAGE 1b: Filter to Foundation contracts only ────────────────────────
+    // Cache validation result per contract — one factory() call max per contract
+    // Known Foundation factory addresses
+    const FOUNDATION_FACTORIES = new Set([
+      '0x3b612a5b49e025a6e4ba4ee4fb1ef46d13588059',
+      '0x612e2daddc89d91409e40f946f9f7cfe422e777e',
+    ]);
+    const FACTORY_SELECTOR = '0xc45a0155';
+
+    const contractCache = new Map(); // contract -> true/false (is Foundation)
+    contractCache.set(SHARED, true); // shared contract is always valid
+
+    // Get unique contracts (excluding shared — already known valid)
+    const uniqueContracts = [...new Set(uniqueTokens.map(t => t.contract))].filter(c => c !== SHARED);
+
+    // Validate each contract once
+    await Promise.all(uniqueContracts.map(async contract => {
+      try {
+        const result = await rpc(RPC, 'eth_call', [
+          { to: contract, data: FACTORY_SELECTOR },
+          'latest',
+        ]);
+        if (result && result.length >= 66) {
+          const factoryAddr = '0x' + result.slice(26).toLowerCase();
+          contractCache.set(contract, FOUNDATION_FACTORIES.has(factoryAddr));
+        } else {
+          contractCache.set(contract, false);
+        }
+      } catch {
+        contractCache.set(contract, false);
+      }
+    }));
+
+    // Keep only tokens from verified Foundation contracts
+    const foundationTokens = uniqueTokens.filter(({ contract }) =>
+      contractCache.get(contract) === true
+    );
+
+    if (foundationTokens.length === 0) {
+      return res.status(200).json({ nfts: [], count: 0 });
+    }
+
     // ── STAGE 2: Enrich — fetch metadata for exact tokens only ──────────────
     // One getNFTMetadata call per token. No collection expansion.
     const results = new Map();
 
-    for (let i = 0; i < uniqueTokens.length; i += 20) {
-      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId }) => {
+    for (let i = 0; i < foundationTokens.length; i += 20) {
+      await Promise.all(foundationTokens.slice(i, i + 20).map(async ({ contract, tokenId }) => {
         const key = `${contract}-${tokenId}`;
         try {
           const data = await fetchJSON(
@@ -135,8 +177,8 @@ export default async function handler(req, res) {
 
     // ── STAGE 3: Ownership — check current owner per exact token ────────────
     // ownerOf(tokenId) via eth_call — accurate, per-token, no collection calls
-    for (let i = 0; i < uniqueTokens.length; i += 20) {
-      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId }) => {
+    for (let i = 0; i < foundationTokens.length; i += 20) {
+      await Promise.all(foundationTokens.slice(i, i + 20).map(async ({ contract, tokenId }) => {
         const key = `${contract}-${tokenId}`;
         const nft = results.get(key);
         if (!nft) return;
