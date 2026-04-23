@@ -566,7 +566,7 @@ footer{padding:1.4rem clamp(1rem,4vw,2.5rem);display:flex;justify-content:space-
       <div class="hsteps">
         <div class="hs"><span class="sn">[01]</span><div class="hst"><h4>Enter your wallet address</h4><p>Paste your public address or connect your wallet. We never ask you to sign anything. No transaction. Nothing spent.</p></div></div>
         <div class="hs"><span class="sn">[02]</span><div class="hst"><h4>We find every Foundation NFT you've ever minted</h4><p>We scan Foundation's shared contract and your personal collection contracts. This finds everything: held pieces, listed pieces, and sold pieces.</p></div></div>
-        <div class="hs"><span class="sn">[03]</span><div class="hst"><h4>Pin your files free</h4><p>Click "Pin all free" and we handle everything server-side via Filebase. Your files get backed up to a redundant pinning node independent of Foundation. Costs nothing.</p></div></div>
+        <div class="hs"><span class="sn">[03]</span><div class="hst"><h4>Pin your files free</h4><p>Click "Pin all free" and we handle everything server-side via Pinata. Your files get pinned to IPFS via Pinata, independent of Foundation's servers. Free, permanent, no cost to you.</p></div></div>
         <div class="hs"><span class="sn">[04]</span><div class="hst"><h4>Delist listed pieces if needed</h4><p>If you want to move listed pieces to a new platform, delist them on Foundation first using the Delist button on each card. Foundation is building a bulk tool. Until then, open listings one at a time. Each delist requires a small gas fee.</p></div></div>
         <div class="hs"><span class="sn">[05]</span><div class="hst"><h4>Move forward</h4><p>Art safe. List on Zora or Manifold today. Or wait for canvas, a new platform being built right now with zero fees, forever.</p></div></div>
       </div>
@@ -1020,7 +1020,7 @@ async function pinOne(i,cm,cv,title,total){
     markPinned(i,title,total);
   }catch(e){
     btn.textContent='Retry';btn.style.opacity='1';btn.disabled=false;
-    toast('Pin failed for "'+title+'". Tap to retry.');
+    toast('[network busy] "'+title+'" — tap Retry in a moment.');
   }
 }
 
