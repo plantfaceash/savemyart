@@ -1,4 +1,4 @@
-// api/scan.js — TOKEN-LEVEL PRECISION 
+// api/scan.js — TOKEN-LEVEL PRECISION
 //
 // The ONLY source of truth: ERC721 transfer events where
 //   from = 0x000...000 (zero address = mint)
@@ -49,23 +49,16 @@ export default async function handler(req, res) {
 
   const addrLC = resolvedAddress.toLowerCase();
 
-  // Known Foundation contracts — used only for shared contract handling
-  const SHARED = '0x3b3ee1931dc30c1957379fac9aba94d1c48a5405';
-
-  // Known Foundation marketplace/escrow contracts
   const MARKETPLACE = new Set([
     '0xcda72070e455bb31c7690a170224ce43623d0b6f',
     '0x0e3a2a1f2146d86a604adc220b4967a898d7fe07',
   ]);
 
-  // ownerOf(uint256) ABI selector
   const OWNER_OF = '0x6352211e';
 
   try {
-    // ── STAGE 1: Get exact minted (contract, tokenId) pairs ─────────────────
-    // from=0x0 AND to=wallet = tokens minted directly to this wallet
-    // This is the ONLY signal of "minted by this wallet"
-    const mintedTokens = []; // [{contract, tokenId}]
+    // Get exact minted (contract, tokenId) pairs — from=0x0 means minted to wallet
+    const mintedTokens = [];
     let pageKey = '';
     do {
       const params = {
@@ -95,7 +88,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ nfts: [], count: 0 });
     }
 
-    // Deduplicate — same token can appear if transferred back and reminted
+    // Deduplicate
     const seen = new Set();
     const uniqueTokens = mintedTokens.filter(({ contract, tokenId }) => {
       const key = `${contract}-${tokenId}`;
@@ -104,54 +97,10 @@ export default async function handler(req, res) {
       return true;
     });
 
-    // ── STAGE 1b: Filter to Foundation contracts only ────────────────────────
-    // Cache validation result per contract — one factory() call max per contract
-    // Known Foundation factory addresses
-    const FOUNDATION_FACTORIES = new Set([
-      '0x3b612a5b49e025a6e4ba4ee4fb1ef46d13588059',
-      '0x612e2daddc89d91409e40f946f9f7cfe422e777e',
-    ]);
-    const FACTORY_SELECTOR = '0xc45a0155';
-
-    const contractCache = new Map(); // contract -> true/false (is Foundation)
-    contractCache.set(SHARED, true); // shared contract is always valid
-
-    // Get unique contracts (excluding shared — already known valid)
-    const uniqueContracts = [...new Set(uniqueTokens.map(t => t.contract))].filter(c => c !== SHARED);
-
-    // Validate each contract once
-    await Promise.all(uniqueContracts.map(async contract => {
-      try {
-        const result = await rpc(RPC, 'eth_call', [
-          { to: contract, data: FACTORY_SELECTOR },
-          'latest',
-        ]);
-        if (result && result.length >= 66) {
-          const factoryAddr = '0x' + result.slice(26).toLowerCase();
-          contractCache.set(contract, FOUNDATION_FACTORIES.has(factoryAddr));
-        } else {
-          contractCache.set(contract, false);
-        }
-      } catch {
-        contractCache.set(contract, false);
-      }
-    }));
-
-    // Keep only tokens from verified Foundation contracts
-    const foundationTokens = uniqueTokens.filter(({ contract }) =>
-      contractCache.get(contract) === true
-    );
-
-    if (foundationTokens.length === 0) {
-      return res.status(200).json({ nfts: [], count: 0 });
-    }
-
-    // ── STAGE 2: Enrich — fetch metadata for exact tokens only ──────────────
-    // One getNFTMetadata call per token. No collection expansion.
+    // Fetch metadata for each exact token only
     const results = new Map();
-
-    for (let i = 0; i < foundationTokens.length; i += 20) {
-      await Promise.all(foundationTokens.slice(i, i + 20).map(async ({ contract, tokenId }) => {
+    for (let i = 0; i < uniqueTokens.length; i += 20) {
+      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId }) => {
         const key = `${contract}-${tokenId}`;
         try {
           const data = await fetchJSON(
@@ -160,25 +109,17 @@ export default async function handler(req, res) {
           results.set(key, fmtNFT(data, contract, tokenId));
         } catch {
           results.set(key, {
-            title: `Token #${tokenId}`,
-            tokenId,
-            contract,
-            chain: 'eth',
-            cid_meta: null,
-            cid_media: null,
-            has_cid: false,
-            display_cid: null,
-            image: null,
-            status: 'unknown',
+            title: `Token #${tokenId}`, tokenId, contract,
+            chain: 'eth', cid_meta: null, cid_media: null,
+            has_cid: false, display_cid: null, image: null, status: 'unknown',
           });
         }
       }));
     }
 
-    // ── STAGE 3: Ownership — check current owner per exact token ────────────
-    // ownerOf(tokenId) via eth_call — accurate, per-token, no collection calls
-    for (let i = 0; i < foundationTokens.length; i += 20) {
-      await Promise.all(foundationTokens.slice(i, i + 20).map(async ({ contract, tokenId }) => {
+    // Check current owner per token via ownerOf()
+    for (let i = 0; i < uniqueTokens.length; i += 20) {
+      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId }) => {
         const key = `${contract}-${tokenId}`;
         const nft = results.get(key);
         if (!nft) return;
@@ -208,7 +149,6 @@ export default async function handler(req, res) {
   }
 }
 
-// ChatGPT-verified CID regex
 const CID_RE = /(?:^|\/)(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})(?=$|[/?#])/i;
 
 function extractCID(uri) {
@@ -233,7 +173,6 @@ function fmtNFT(nft, contractFallback, tokenIdFallback) {
     || extractCID(nft.tokenUri?.gateway)
     || extractCID(nft.rawMetadata?.metadata_url)
     || null;
-
   const mediaCID = extractCID(nft.rawMetadata?.image)
     || extractCID(nft.rawMetadata?.animation_url)
     || extractCID(nft.media?.[0]?.uri)
@@ -241,7 +180,6 @@ function fmtNFT(nft, contractFallback, tokenIdFallback) {
     || extractCID(nft.image?.originalUrl)
     || extractCID(nft.image?.cachedUrl)
     || null;
-
   const hasCid = Boolean(metaCID || mediaCID);
   return {
     title: nft.name || nft.rawMetadata?.name || `Token #${nft.tokenId || tokenIdFallback}`,
