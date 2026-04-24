@@ -730,24 +730,7 @@ function classifyNfts(nfts){
     n.isPrimary=isPrimaryArtwork(n);
   }
 
-  // Second pass: detect collected editions
-  // If 2+ NFTs share the exact same title from the same contract = likely collected, not created
-  const titleContractCount={};
   for(const n of nfts){
-    if(!n.isPrimary)continue;
-    const key=(n.contract||'')+':::'+(n.title||'').trim().toLowerCase();
-    titleContractCount[key]=(titleContractCount[key]||0)+1;
-  }
-
-  for(const n of nfts){
-    if(n.isPrimary){
-      const key=(n.contract||'')+':::'+(n.title||'').trim().toLowerCase();
-      if(titleContractCount[key]>1){
-        // Multiple tokens with same title from same contract = collected edition
-        n.isPrimary=false;
-        n.isCollectedEdition=true;
-      }
-    }
     if(n.isPrimary)primary.push(n);
     else secondary.push(n);
   }
@@ -877,10 +860,22 @@ function showResults(nfts){
     groups[key].tokens.push(n);
   });
 
-  const groupsHtml=Object.entries(groups).map(([groupKey,g],idx)=>{
+  // Single-piece groups = flat card. Multi-piece = collapsible folder.
+  const soloCards=[];
+  const multiGroups=[];
+  Object.entries(groups).forEach(([groupKey,g])=>{
+    if(g.tokens.length===1)soloCards.push(g.tokens[0]);
+    else multiGroups.push([groupKey,g]);
+  });
+
+  const soloHtml=soloCards.length>0
+    ?'<div class="nftgrid primary-grid">'+soloCards.map(n=>nftCard(n,n._idx,total)).join('')+'</div>'
+    :'';
+
+  const foldersHtml=multiGroups.map(([groupKey,g],idx)=>{
     const safeId=groupKey.replace(/[^a-zA-Z0-9_-]/g,'-');
     const gid='grp-'+safeId;
-    const lazy=idx>=2;
+    const lazy=idx>=3;
     const cards=lazy?'':g.tokens.map(n=>nftCard(n,n._idx,total)).join('');
     return '<div class="coll-group'+(lazy?' collapsed':'')+'" id="'+gid+'"'+
       ' data-lazy="'+(lazy?'true':'false')+'"'+
@@ -889,12 +884,14 @@ function showResults(nfts){
       ' data-contract="'+g.contract+'">'+
       '<div class="coll-header" onclick="toggleGroup(\''+gid+'\')">'+
         '<span class="coll-name">'+g.name+'</span>'+
-        '<span class="coll-meta">['+g.tokens.length+' piece'+(g.tokens.length!==1?'s':'')+']</span>'+
+        '<span class="coll-meta">['+g.tokens.length+' pieces]</span>'+
         '<span class="coll-toggle">▾</span>'+
       '</div>'+
       '<div class="coll-grid">'+cards+'</div>'+
     '</div>';
   }).join('');
+
+  const groupsHtml=soloHtml+foldersHtml;
 
   // ONE collapsed section for ALL secondary NFTs — not dozens of folders
   const archivedSection=secondaryCount>0
