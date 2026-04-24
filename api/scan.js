@@ -79,7 +79,7 @@ export default async function handler(req, res) {
       let pageKey = '';
       do {
         const params = {
-          fromBlock: chain === 'base' ? '0x989680' : '0xB00000', // Base: ~Jan 2024 (Foundation launch on Base)
+          fromBlock: chain === 'base' ? '0x0' : '0xB00000',
           toBlock: 'latest',
           fromAddress: '0x0000000000000000000000000000000000000000',
           toAddress: resolvedAddress,
