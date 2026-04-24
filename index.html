@@ -706,31 +706,48 @@ function looksSpam(n){
   // Alchemy spam flag
   if(n.isSpam===true)return true;
   // Known spam patterns in title
-  if(/claim|airdrop|reward|voucher|bonus|free mint|visit|drop/i.test(title))return true;
+  if(/\bclaim\b|\bairdrop\b|\breward\b|\bvoucher\b|\bbonus\b|free mint|\bvisit\b|\bdrop\b/i.test(title))return true;
   // $ token symbol spam (e.g. $PENGU, $ARB, $JUP)
   if(/\$[a-z]{2,10}/i.test(title))return true;
   // Spam wording in description
   if(/claim|airdrop|reward|voucher|bonus|free mint|visit/i.test(desc))return true;
   return false;
 }
+// Known Foundation shared/factory contracts — artist's work even if deployer isn't them
+const FOUNDATION_SHARED=new Set([
+  '0x3b3ee1931dc30c1957379fac9aba94d1c48a5405', // Foundation FND shared contract
+  '0x3b612a5b49e025a6e4ba4ee4fb1ef46d13588059', // Foundation factory v1
+  '0x612e2daddc89d91409e40f946f9f7cfe422e777e', // Foundation factory v2
+]);
+
 function isPrimaryArtwork(n){
   if(!hasCidFn(n))return false;
   if(looksSpam(n))return false;
   if(looksBulk(n))return false;
-  return true;
+
+  const wallet=(currentWallet||'').toLowerCase();
+  const deployer=(n.contractDeployer||'').toLowerCase();
+  const contract=(n.contract||'').toLowerCase();
+
+  // Strong signal: artist deployed this contract themselves
+  if(deployer&&wallet&&deployer===wallet)return true;
+
+  // Known Foundation shared/factory contracts — treat as primary
+  if(FOUNDATION_SHARED.has(contract))return true;
+
+  // No deployer info returned — can't tell, keep as primary (better to show than hide)
+  if(!deployer)return true;
+
+  // Deployer is someone else — likely collected/received, not the artist's own work
+  return false;
 }
 function classifyNfts(nfts){
   const primary=[];
   const secondary=[];
-
-  // First pass: tag everything
   for(const n of nfts){
     n.isBulk=looksBulk(n);
     n.isSpam=looksSpam(n);
     n.isPrimary=isPrimaryArtwork(n);
-  }
-
-  for(const n of nfts){
     if(n.isPrimary)primary.push(n);
     else secondary.push(n);
   }
