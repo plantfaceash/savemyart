@@ -1,4 +1,4 @@
-// api/scan.js — v1.12
+// api/scan.js — v1.12 
 // Fixes in this version:
 // 1. BigInt tokenId normalisation (prevents precision loss on large token IDs)
 // 2. is_video + media_format detected server-side
@@ -285,6 +285,7 @@ function fmtNFT(nft, contractFallback, tokenIdFallback) {
     title: nft.name || nft.rawMetadata?.name || `Token #${nft.tokenId || tokenIdFallback}`,
     tokenId: nft.tokenId || tokenIdFallback,
     contract: (nft.contract?.address || contractFallback || '').toLowerCase(),
+    contractDeployer: (nft.contract?.contractDeployer || '').toLowerCase(),
     chain: 'eth', // overridden after call with actual chain
     cid_meta: metaCID,
     cid_media: mediaCID,
