@@ -404,6 +404,9 @@ footer{padding:1.4rem clamp(1rem,4vw,2.5rem);display:flex;justify-content:space-
 /* TOAST */
 .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--s2);border:.5px solid var(--gold);border-radius:var(--r2);padding:11px 15px;font-size:13px;z-index:600;display:flex;align-items:center;gap:8px;max-width:290px;line-height:1.45;animation:rise .22s ease;pointer-events:none}
 .tdot{width:6px;height:6px;border-radius:50%;background:var(--gold);flex-shrink:0}
+
+.clr-saved{font-family:var(--mono);font-size:11px;color:var(--t2);background:none;border:none;cursor:pointer;padding:4px 8px;opacity:.6}
+.clr-saved:hover{opacity:1;color:#e06060}
 </style>
 </head>
 <body>
@@ -650,6 +653,28 @@ let pinnedCount=0;
 let pinnableCount=0;
 const pinned=new Set();
 let selectedCards=new Set();
+let currentWallet='';
+
+/* LOCAL STORAGE SESSION */
+function lsKey(wallet){return 'sma_pins_'+wallet.toLowerCase();}
+function loadSaved(wallet){
+  if(!wallet)return {};
+  try{return JSON.parse(localStorage.getItem(lsKey(wallet))||'{}');}
+  catch{return {};}
+}
+function savePin(wallet,contract,tokenId,cid,title){
+  if(!wallet)return;
+  const saved=loadSaved(wallet);
+  saved[contract+'-'+tokenId]={contract,tokenId,cid,title,ts:Date.now()};
+  localStorage.setItem(lsKey(wallet),JSON.stringify(saved));
+}
+function clearSaved(wallet){
+  if(!wallet)return;
+  localStorage.removeItem(lsKey(wallet));
+}
+function hasSaved(wallet){
+  return Object.keys(loadSaved(wallet)).length>0;
+}
 
 function doRescue(){
   const v=document.getElementById('wallet-addr').value.trim();
@@ -657,6 +682,7 @@ function doRescue(){
   // Full state reset
   currentNfts=[];selectedCards.clear();pinned.clear();
   pinnedCount=0;activeFilter='all';fndOpenedSet.clear();
+  currentWallet=v;
   const btn=document.getElementById('rescue-btn');
   btn.disabled=true;btn.textContent='Scanning...';
   document.getElementById('completion-area').innerHTML='';
@@ -817,6 +843,7 @@ function showResults(nfts){
       '<div class="resacts">'+
         '<button class="rb rbg" id="pin-all-btn" onclick="pinAll()">Pin all free</button>'+
         '<button class="rb rba" onclick="selectAll()">Select all</button>'+
+        (hasSaved(currentWallet)?'<button class="rb" onclick="doClearSaved()" style="opacity:.6;font-size:11px">[clear saved]</button>':'')+
         (listedCount>0?'<button class="rb rbo" onclick="selectListed()">Select listed ('+listedCount+')</button>':'')+
         '<button class="rb rbo" onclick="dlAll()">Download all [JSON]</button>'+
         '<button class="rb rbo" onclick="shareRescued()"><svg style="width:11px;height:11px;fill:currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.73-8.835L1.254 2.25H8.08l4.259 5.629L18.244 2.25z"/></svg> Share</button>'+
@@ -845,6 +872,36 @@ function showResults(nfts){
   setTimeout(()=>document.getElementById('results-area').scrollIntoView({behavior:'smooth',block:'start'}),150);
   setTimeout(()=>showResultsModal(),500);
   setTimeout(()=>toast('['+total+' works found, '+Object.keys(groups).length+' collections]'),300);
+  // Pre-mark previously saved pins from localStorage
+  setTimeout(()=>{
+    const saved=loadSaved(currentWallet);
+    const savedKeys=Object.keys(saved);
+    if(savedKeys.length===0)return;
+    let restoredCount=0;
+    currentNfts.forEach((n,i)=>{
+      const key=(n.contract||'')+'-'+(n.tokenId||'');
+      if(!saved[key]||pinned.has(i))return;
+      pinned.add(i);
+      restoredCount++;
+      const btn=document.getElementById('pin-'+i);
+      if(btn){
+        btn.innerHTML='<a href="https://app.pinata.cloud/pinmanager" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">[◆ saved]</a>';
+        btn.className='nb nbpin pinned';
+        btn.style.opacity='1';
+        btn.style.background='rgba(45,122,80,0.35)';
+        btn.disabled=true;
+      }
+      const badge=document.getElementById('badge-'+i);
+      if(badge){badge.className='sbadge sb-safe';badge.textContent='[safe]';}
+      const card=document.getElementById('card-'+i);
+      if(card)card.classList.add('rescued');
+    });
+    if(restoredCount>0){
+      const sf=document.getElementById('saved-filt');
+      if(sf){sf.style.display='';sf.textContent='[◆ saved] ('+restoredCount+')';}
+      toast('[◆ '+restoredCount+' previously saved] — already pinned in this browser.');
+    }
+  },800);
 }
 
 function nftCard(n,i,total){
@@ -1061,6 +1118,14 @@ async function pinOne(i,cm,cv,title,total){
 
 function markPinned(i,title,total){
   pinned.add(i);pinnedCount++;
+  // Persist to localStorage
+  const card=getCard(i);
+  if(card&&currentWallet){
+    const contract=card.dataset.contract||'';
+    const tokenId=card.dataset.tokenid||'';
+    const cid=decodeURIComponent(card.dataset.dc||card.dataset.cm||'');
+    savePin(currentWallet,contract,tokenId,cid,title);
+  }
   const btn=document.getElementById('pin-'+i);
   btn.innerHTML='<a href="https://app.pinata.cloud/pinmanager" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">[◆ saved]</a>';
   btn.className='nb nbpin pinned';btn.style.opacity='1';btn.style.background='rgba(45,122,80,0.35)';
@@ -1072,7 +1137,6 @@ function markPinned(i,title,total){
   if(fill)fill.style.width=(pinnedCount/total*100)+'%';
   if(count)count.textContent=pinnedCount+' / '+total;
   toast('[◆] "'+title+'" pinned to IPFS. Files secured forever.');
-  const card=document.getElementById('card-'+i);
   if(card){card.dataset.status='pinned';}
   // Update saved filter button
   const sf=document.getElementById('saved-filt');
@@ -1202,6 +1266,40 @@ function notifyMe(){
 function followOnX(){window.open('https://twitter.com/intent/follow?screen_name=PlantFaceAsh','_blank','noopener');toast('[Following @PlantFaceAsh] You\'ll see the canvas launch on X.');}
 
 /* TOAST */
+function doClearSaved(){
+  if(!currentWallet)return;
+  if(!confirm('Clear saved session data for this wallet? You can still re-pin anytime.'))return;
+  clearSaved(currentWallet);
+  // Reset rescued cards in UI
+  pinned.clear();pinnedCount=0;
+  currentNfts.forEach((_,i)=>{
+    const btn=document.getElementById('pin-'+i);
+    const card=document.getElementById('card-'+i);
+    const badge=document.getElementById('badge-'+i);
+    if(card&&card.classList.contains('rescued')){
+      card.classList.remove('rescued');
+      if(btn&&card.dataset.hascid==='true'){
+        btn.innerHTML='Pin free';
+        btn.className='nb nbpin pulse-anim';
+        btn.disabled=false;
+        btn.style.opacity='1';
+        btn.style.background='';
+      }
+      if(badge){
+        const st=card.dataset.status||'unknown';
+        const sc={'held':'sb-held','listed':'sb-listed','sold':'sb-sold','unknown':'sb-backup'}[st]||'sb-backup';
+        const sl={'held':'[held]','listed':'[listed]','sold':'[sold]','unknown':'[needs backup]'}[st]||'[needs backup]';
+        badge.className='sbadge '+sc;badge.textContent=sl;
+      }
+    }
+  });
+  const sf=document.getElementById('saved-filt');
+  if(sf)sf.style.display='none';
+  // Remove clear button
+  document.querySelectorAll('.clr-saved').forEach(b=>b.remove());
+  toast('Saved session data cleared.');
+}
+
 function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function openVideoModal(i){
   const card=getCard(i);
