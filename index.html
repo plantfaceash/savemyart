@@ -833,7 +833,7 @@ function showResults(nfts){
   pinned.clear();
   selectedCards.clear();
 
-  const statusOrder={listed:0,held:1,unknown:2,sold:3};
+  const statusOrder={listed:0,sold:1,held:2,unknown:3};
   const rank=s=>statusOrder[s]??2;
 
   // Classify using v2 classifiers
