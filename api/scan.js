@@ -67,7 +67,8 @@ export default async function handler(req, res) {
       let pageKey = '';
       do {
         const params = {
-          fromBlock: '0x0',
+          // Eth: Foundation launched ~block 11.5M. Base: launched ~block 1 (Aug 2023 = ~0x0)
+          fromBlock: chain === 'base' ? '0x0' : '0xB00000',
           toBlock: 'latest',
           fromAddress: '0x0000000000000000000000000000000000000000',
           toAddress: resolvedAddress,
