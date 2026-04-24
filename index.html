@@ -753,10 +753,13 @@ function showResults(nfts){
   pinned.clear();
   selectedCards.clear();
 
+  // Separate spam first — quarantine but don't delete
+  const spam=nfts.filter(n=>n.isSpam===true);
+  const cleanNfts=nfts.filter(n=>n.isSpam!==true);
   // Sort: pinnable (has CID) first, no-CID last
   const statusOrder={held:0,listed:1,unknown:2,sold:3};
-  const withCid=nfts.filter(n=>n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media)).sort((a,b)=>(statusOrder[a.status]||2)-(statusOrder[b.status]||2));
-  const noCid=nfts.filter(n=>!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media)));
+  const withCid=cleanNfts.filter(n=>n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media)).sort((a,b)=>(statusOrder[a.status]||2)-(statusOrder[b.status]||2));
+  const noCid=cleanNfts.filter(n=>!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media)));
   // Rebuild currentNfts in sorted order so indices stay consistent
   currentNfts=[...withCid,...noCid];
   // Reassign global indices
@@ -781,9 +784,11 @@ function showResults(nfts){
   const groupsHtml=Object.entries(groups).map(([contract,g],idx)=>{
     const gid='grp-'+contract.slice(2,10);
     const lazy=idx>=2;
+    const groupChain=g.tokens[0]?.chain||'eth';
     const cards=lazy?'':g.tokens.map(n=>nftCard(n,n._idx,total)).join('');
     return '<div class="coll-group'+(lazy?' collapsed':'')+'" id="'+gid+'"'+
       ' data-lazy="'+(lazy?'true':'false')+'"'+
+      ' data-chain="'+groupChain+'"'+
       ' data-contract="'+contract+'">'+
       '<div class="coll-header" onclick="toggleGroup(\''+gid+'\')">'+
         '<span class="coll-name">'+g.name+'</span>'+
@@ -806,9 +811,11 @@ function showResults(nfts){
   const archivedGroupsHtml=Object.entries(archivedGroups).map(([contract,g],idx)=>{
     const gid='arch-'+contract.slice(2,10);
     const lazy=idx>=1;
+    const groupChain=g.tokens[0]?.chain||'eth';
     const cards=lazy?'':g.tokens.map(n=>nftCard(n,n._idx,total)).join('');
     return '<div class="coll-group'+(lazy?' collapsed':'')+'" id="'+gid+'"'+
       ' data-lazy="'+(lazy?'true':'false')+'"'+
+      ' data-chain="'+groupChain+'"'+
       ' data-contract="'+contract+'" data-archived="true">'+
       '<div class="coll-header" onclick="toggleGroup(\''+gid+'\')">'+
         '<span class="coll-name">'+g.name+'</span>'+
@@ -848,7 +855,7 @@ function showResults(nfts){
     '<div class="reshdr">'+
       '<div class="resfound">'+
         '<h2>Found <em>'+total+' work'+(total!==1?'s':'')+'</em> from Foundation</h2>'+
-        '<p>'+Object.keys(groups).length+' collection'+(Object.keys(groups).length!==1?'s':'')+' · '+withCidCount+' pinnable · '+(noCidCount>0?noCidCount+' no CID · ':'')+listedCount+' listed</p>'+
+        '<p>'+Object.keys(groups).length+' collection'+(Object.keys(groups).length!==1?'s':'')+' · '+withCidCount+' pinnable · '+(noCidCount>0?noCidCount+' no CID · ':'')+listedCount+' listed'+(spam.length>0?' · <button onclick="document.getElementById(\'spam-section\').style.display=\'\'" style="font-family:var(--mono);font-size:11px;color:#e06060;background:none;border:none;cursor:pointer;padding:0;text-decoration:underline">'+spam.length+' suspected spam hidden</button>':'')+' </p>'+
       '</div>'+
       '<div class="resacts">'+
         '<button class="rb rbg" id="pin-all-btn" onclick="pinAll()">Pin all free</button>'+
@@ -881,7 +888,13 @@ function showResults(nfts){
       '<div class="pp-bar"><div class="pp-fill" id="pp-fill"></div></div>'+
     '</div>'+
     '<div id="collections-wrap">'+groupsHtml+'</div>'+
-    archivedSection;
+    archivedSection+
+    (spam.length>0
+      ?'<div id="spam-section" style="display:none;margin-top:1rem;padding:1rem;background:rgba(155,42,42,0.07);border:.5px solid rgba(155,42,42,0.25);border-radius:var(--r2)">'+
+          '<div style="font-family:var(--mono);font-size:11px;color:#e06060;margin-bottom:.75rem">['+spam.length+' suspected spam] — Alchemy flagged these as spam contracts. They were minted to your wallet but may not be yours.</div>'+
+          '<div class="nftgrid">'+spam.map((n,si)=>{const i=currentNfts.length+si;n._idx=i;const card=nftCard(n,i,currentNfts.length+spam.length);return card.replace('class="nftcard"','class="nftcard" data-spam="true"');}).join('')+'</div>'+
+        '</div>'
+      :'');
 
   // Reset chain filter buttons to 'all'
   setTimeout(()=>{
@@ -978,7 +991,7 @@ function nftCard(n,i,total){
     '</div>'+
     '<div class="nftbody">'+
       '<div class="nftt">'+(n.title||'Untitled')+'</div>'+
-      '<div class="nftch"><span class="chdot"></span>Ethereum #'+(n.tokenId||'')+'</div>'+
+      '<div class="nftch"><span class="chdot"></span>'+(chain==='base'?'Base':'Ethereum')+' #'+(n.tokenId||'')+'</div>'+
       '<div class="cidbox"><div class="cidl">Metadata CID</div><div class="cidv" onclick="copyCIDCard('+i+')">'+cidLabel+'</div></div>'+
       '<div class="nftbtns">'+
         pinBtn+
@@ -1039,29 +1052,55 @@ function setChainFilter(chain,btn){
   activeChain=chain;
   document.querySelectorAll('.chain-filt').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
+  // Show/hide collection groups by chain (handles lazy-rendered cards correctly)
+  document.querySelectorAll('.coll-group').forEach(group=>{
+    const groupChain=(group.dataset.chain||'eth').toLowerCase();
+    const show=chain==='all'||groupChain===chain.toLowerCase();
+    group.style.display=show?'':'none';
+  });
   applyFilter();
 }
 
 function applyFilter(){
-  let visible=0;
+  // Count from data array — handles lazy-rendered (not yet in DOM) cards correctly
+  const visible=currentNfts.filter(n=>{
+    const chain=(n.chain||'eth').toLowerCase();
+    const isPinned=pinned.has(n._idx);
+    const hasCid=!!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media));
+    // Chain filter
+    if(activeChain&&activeChain!=='all'&&chain!==activeChain.toLowerCase())return false;
+    // Status filter
+    if(activeFilter==='listed')return n.status==='listed';
+    if(activeFilter==='sold')return n.status==='sold';
+    if(activeFilter==='held')return n.status==='held';
+    if(activeFilter==='needs-pinning')return hasCid&&!isPinned;
+    if(activeFilter==='no-cid')return !hasCid&&!isPinned;
+    if(activeFilter==='saved')return isPinned;
+    return true; // 'all'
+  }).length;
+
+  // Also hide/show rendered DOM cards that are already in the DOM
   document.querySelectorAll('.nftcard').forEach(card=>{
-    const status=card.dataset.status||'unknown';
+    if(card.dataset.spam==='true')return; // spam cards are in a separate section, don't touch
+    const idx=parseInt(card.dataset.idx);
+    const n=currentNfts[idx];
+    if(!n){card.classList.add('hidden');return;}
+    const chain=(n.chain||'eth').toLowerCase();
+    const isPinned=pinned.has(n._idx);
     const hasCid=card.dataset.hascid==='true';
     let show=true;
-    if(activeFilter==='listed')show=status==='listed';
-    else if(activeFilter==='sold')show=status==='sold';
-    else if(activeFilter==='held')show=status==='held';
-    else if(activeFilter==='needs-pinning')show=hasCid&&!card.classList.contains('rescued');
-    else if(activeFilter==='no-cid')show=!hasCid&&!card.classList.contains('rescued');
-    else if(activeFilter==='saved')show=card.classList.contains('rescued');
-    // Chain filter on top of status filter
-    if(show&&activeChain&&activeChain!=='all'){
-      const cardChain=(card.dataset.chain||'eth').toLowerCase();
-      show=cardChain===activeChain.toLowerCase();
+    if(activeChain&&activeChain!=='all'&&chain!==activeChain.toLowerCase())show=false;
+    if(show){
+      if(activeFilter==='listed')show=n.status==='listed';
+      else if(activeFilter==='sold')show=n.status==='sold';
+      else if(activeFilter==='held')show=n.status==='held';
+      else if(activeFilter==='needs-pinning')show=hasCid&&!card.classList.contains('rescued');
+      else if(activeFilter==='no-cid')show=!hasCid&&!card.classList.contains('rescued');
+      else if(activeFilter==='saved')show=card.classList.contains('rescued');
     }
     card.classList.toggle('hidden',!show);
-    if(show)visible++;
   });
+
   const fc=document.getElementById('filter-count');
   if(fc)fc.textContent=visible+' visible';
 }
