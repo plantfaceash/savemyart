@@ -689,21 +689,26 @@ let currentPinBatchDone=0;  // tracks completion within active batch
 let selectedCards=new Set();
 let currentWallet='';
 let activeChain='all';
-let STRICT_MODE=true; // show only likely Foundation-style NFTs by default
+let STRICT_MODE=true; // default: show only primary artwork
 
 /* HEURISTICS */
 function isLikelyFoundation(nft){
   const title=nft.title||'';
-  // Exclude if title looks like generative series (#001, #0001 etc)
   if(/#[0-9]{3,}/.test(title))return false;
-  // Exclude known spam
   if(nft.isSpam)return false;
-  // Must have CID
   if(!(nft.has_cid!==undefined?nft.has_cid:(nft.cid_meta||nft.cid_media)))return false;
   return true;
 }
 function isBulkCollection(nft){
   return /#[0-9]{3,}/.test(nft.title||'');
+}
+// PRIMARY: likely an individual artwork by this artist
+function isPrimaryArtwork(nft){
+  if(nft.isSpam)return false;
+  if(isBulkCollection(nft))return false;
+  const hasCid=!!(nft.has_cid!==undefined?nft.has_cid:(nft.cid_meta||nft.cid_media));
+  if(!hasCid)return false;
+  return true;
 }
 
 /* LOCAL STORAGE SESSION */
@@ -800,33 +805,37 @@ function showResults(nfts){
   pinned.clear();
   selectedCards.clear();
 
-  // Separate spam first — quarantine but don't delete
-  const spam=nfts.filter(n=>n.isSpam===true);
-  const cleanNfts=nfts.filter(n=>n.isSpam!==true);
-  // Sort: pinnable (has CID) first, no-CID last
   const statusOrder={held:0,listed:1,unknown:2,sold:3};
   const rank=s=>statusOrder[s]??2;
-  const withCid=cleanNfts.filter(n=>n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media)).sort((a,b)=>rank(a.status)-rank(b.status));
-  const noCid=cleanNfts.filter(n=>!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media)));
-  // Rebuild currentNfts in sorted order so indices stay consistent
-  currentNfts=[...withCid,...noCid];
-  // Tag bulk collections and likely Foundation pieces
-  currentNfts.forEach((n,i)=>{
-    n._idx=i;
+
+  // Tag every NFT
+  nfts.forEach(n=>{
     n.isBulk=isBulkCollection(n);
     n.isLikelyFnd=isLikelyFoundation(n);
+    n.isPrimary=isPrimaryArtwork(n);
   });
 
-  const total=currentNfts.length;
-  const listedCount=currentNfts.filter(n=>n.status==='listed').length;
-  const noCidCount=noCid.length;
-  const withCidCount=withCid.length;
-  pinnableCount=withCidCount; // global for completion check
+  // PRIMARY: likely artwork — has CID, not bulk, not spam
+  const primaryNfts=nfts.filter(n=>n.isPrimary&&!n.isSpam).sort((a,b)=>rank(a.status)-rank(b.status));
+  // SECONDARY: everything else — bulk, no-CID, spam, uncertain
+  const secondaryNfts=nfts.filter(n=>!n.isPrimary||n.isSpam);
 
-  // Build collection groups for PINNABLE section
+  // All NFTs in one array, primary first (indices must be stable for pinning)
+  currentNfts=[...primaryNfts,...secondaryNfts];
+  currentNfts.forEach((n,i)=>n._idx=i);
+
+  const total=currentNfts.length;
+  const primaryCount=primaryNfts.length;
+  const secondaryCount=secondaryNfts.length;
+  const listedCount=primaryNfts.filter(n=>n.status==='listed').length;
+  pinnableCount=primaryCount; // completion uses primary only
+  const soldCount=primaryNfts.filter(n=>n.status==='sold').length;
+  const heldCount=primaryNfts.filter(n=>n.status==='held').length;
+
+  // Groups from PRIMARY nfts only — the main result folders
   const groups={};
-  withCid.forEach((n)=>{
-    const key=(n.chain||'eth')+':'+( n.contract||'shared');
+  primaryNfts.forEach((n)=>{
+    const key=(n.chain||'eth')+':'+(n.contract||'shared');
     if(!groups[key]){
       groups[key]={name:n.title.replace(/ ?#\d+$/,'').trim()||'Collection',tokens:[],chain:n.chain||'eth',contract:n.contract||'shared'};
     }
@@ -838,10 +847,9 @@ function showResults(nfts){
     const gid='grp-'+safeId;
     const lazy=idx>=2;
     const cards=lazy?'':g.tokens.map(n=>nftCard(n,n._idx,total)).join('');
-    const bulkGroup=g.tokens.some(n=>n.isBulk);
-    return '<div class="coll-group'+(lazy?' collapsed':'')+(bulkGroup&&STRICT_MODE?' hidden':'')+'" id="'+gid+'"'+
+    return '<div class="coll-group'+(lazy?' collapsed':'')+'" id="'+gid+'"'+
       ' data-lazy="'+(lazy?'true':'false')+'"'+
-      ' data-bulk="'+(bulkGroup?'true':'false')+'"'+
+      ' data-bulk="false"'+
       ' data-chain="'+g.chain+'"'+
       ' data-contract="'+g.contract+'">'+
       '<div class="coll-header" onclick="toggleGroup(\''+gid+'\')">'+
@@ -853,45 +861,23 @@ function showResults(nfts){
     '</div>';
   }).join('');
 
-  // Build archived section for NO-CID pieces
-  const archivedGroups={};
-  noCid.forEach((n)=>{
-    const key=(n.chain||'eth')+':'+(n.contract||'shared');
-    if(!archivedGroups[key]){
-      archivedGroups[key]={name:n.title.replace(/ ?#\d+$/,'').trim()||'Collection',tokens:[],chain:n.chain||'eth',contract:n.contract||'shared'};
-    }
-    archivedGroups[key].tokens.push(n);
-  });
-  const archivedGroupsHtml=Object.entries(archivedGroups).map(([groupKey,g],idx)=>{
-    const safeId=groupKey.replace(/[^a-zA-Z0-9_-]/g,'-');
-    const gid='arch-'+safeId;
-    const lazy=idx>=1;
-    const cards=lazy?'':g.tokens.map(n=>nftCard(n,n._idx,total)).join('');
-    return '<div class="coll-group'+(lazy?' collapsed':'')+'" id="'+gid+'"'+
-      ' data-lazy="'+(lazy?'true':'false')+'"'+
-      ' data-chain="'+g.chain+'"'+
-      ' data-contract="'+g.contract+'" data-archived="true">'+
-      '<div class="coll-header" onclick="toggleGroup(\''+gid+'\')">'+
-        '<span class="coll-name">'+g.name+'</span>'+
-        '<span class="coll-meta">['+g.tokens.length+' piece'+(g.tokens.length!==1?'s':'')+']</span>'+
-        '<span class="coll-toggle">▾</span>'+
-      '</div>'+
-      '<div class="coll-grid">'+cards+'</div>'+
-    '</div>';
-  }).join('');
-
-    const archivedSection=noCidCount>0
-    ?'<div class="archived-section" id="archived-sec">'+
-        '<div class="archived-header" onclick="document.getElementById(\'archived-sec\').classList.toggle(\'collapsed\')">'+
-          '<span class="archived-title">[no ipfs data found — '+noCidCount+' piece'+(noCidCount!==1?'s':'')+']</span>'+
-          '<span class="archived-toggle">▾</span>'+
+  // ONE collapsed section for ALL secondary NFTs — not dozens of folders
+  const archivedSection=secondaryCount>0
+    ?'<div class="archived-section collapsed" id="other-nfts-sec">'+
+        '<div class="archived-header" onclick="document.getElementById(\'other-nfts-sec\').classList.toggle(\'collapsed\')">'+
+          '<span class="archived-title">['+secondaryCount+' other NFT'+(secondaryCount!==1?'s':'')+' hidden]</span>'+
+          '<span style="font-family:var(--mono);font-size:11px;color:var(--t2);margin-left:8px">bulk, no IPFS, spam</span>'+
+          '<span class="archived-toggle" style="margin-left:auto">▾</span>'+
         '</div>'+
         '<div class="archived-body">'+
-          '<p class="archived-note">These pieces exist on the blockchain, but Foundation hasn\'t exposed their IPFS metadata. We can\'t pin what we can\'t find. They\'re still yours on Ethereum, just not rescuable through this tool.</p>'+
-          archivedGroupsHtml+
+          '<p class="archived-note" style="font-size:12px;color:var(--t2);margin-bottom:1rem">These were hidden because they appear to be bulk collections, have no IPFS data, or show spam signals. They were minted to your wallet but may not be your Foundation artwork.</p>'+
+          '<div class="nftgrid">'+secondaryNfts.map((n,si)=>{
+            return nftCard(n,primaryNfts.length+si,total);
+          }).join('')+'</div>'+
         '</div>'+
       '</div>'
     :'';
+
 
   const delistBar=listedCount>0
     ?'<div class="delist-bar">'+
@@ -907,13 +893,12 @@ function showResults(nfts){
 
   document.getElementById('results-area').innerHTML=
     '<div class="reshdr">'+
-      '<div class="usage-warn" style="font-family:var(--mono);font-size:11px;color:var(--t2);padding:8px 12px;background:var(--s2);border-radius:var(--r2);margin-bottom:12px;line-height:1.6">'+
-        'This tool is for artists backing up their own Foundation artworks. Pins confirmed by Pinata. '+
-        '<button onclick="STRICT_MODE=!STRICT_MODE;applyStrictMode()" id="strict-toggle" style="font-family:var(--mono);font-size:11px;background:none;border:none;cursor:pointer;color:var(--gold);padding:0;text-decoration:underline">'+(STRICT_MODE?'Bulk collections hidden — show all':'Showing all NFTs — hide bulk collections')+'</button>'+
+      '<div class="usage-warn" style="font-family:var(--mono);font-size:11px;color:var(--t2);padding:8px 12px;background:var(--s2);border-radius:var(--r2);margin-bottom:12px">'+
+        'Showing likely artwork only. Non-Foundation NFTs are collapsed below. Pins confirmed by Pinata.'+
       '</div>'+
       '<div class="resfound">'+
-        '<h2>Found <em>'+total+' minted NFT'+(total!==1?'s':'')+'</em> · <span style="color:#5dba85">'+withCidCount+' pinnable</span></h2>'+
-        '<p>'+Object.keys(groups).length+' collection'+(Object.keys(groups).length!==1?'s':'')+' · '+withCidCount+' with IPFS data · '+(noCidCount>0?noCidCount+' no CID · ':'')+listedCount+' listed'+(spam.length>0?' · <button onclick="document.getElementById(\'spam-section\').style.display=\'\'" style="font-family:var(--mono);font-size:11px;color:#e06060;background:none;border:none;cursor:pointer;padding:0;text-decoration:underline">'+spam.length+' suspected spam hidden</button>':'')+' </p>'+
+        '<h2>Found <em>'+primaryCount+' likely artwork'+(primaryCount!==1?'s':'')+'</em> to rescue</h2>'+
+        '<p>'+Object.keys(groups).length+' collection'+(Object.keys(groups).length!==1?'s':'')+' · '+primaryCount+' pinnable · '+listedCount+' listed'+(secondaryCount>0?' · '+secondaryCount+' other NFTs hidden':'')+' </p>'+
       '</div>'+
       '<div class="resacts">'+
         '<button class="rb rbg" id="pin-all-btn" onclick="pinAll()">Pin all free</button>'+
@@ -927,12 +912,11 @@ function showResults(nfts){
     '</div>'+
     '<div class="filter-bar">'+
       '<span class="filter-label">filter:</span>'+
-      '<button class="filt active green" data-filter="all" onclick="setFilter(\'all\',this)">All ('+total+')</button>'+
-      '<button class="filt" data-filter="needs-pinning" onclick="setFilter(\'needs-pinning\',this)">Pinnable ('+withCidCount+')</button>'+
+      '<button class="filt active green" data-filter="all" onclick="setFilter(\'all\',this)">All ('+primaryCount+')</button>'+
+      '<button class="filt" data-filter="needs-pinning" onclick="setFilter(\'needs-pinning\',this)">Pinnable ('+primaryCount+')</button>'+
       (listedCount>0?'<button class="filt" data-filter="listed" onclick="setFilter(\'listed\',this)">Listed ('+listedCount+')</button>':'')+
-      '<button class="filt" data-filter="sold" onclick="setFilter(\'sold\',this)">Sold ('+currentNfts.filter(n=>n.status==='sold').length+')</button>'+
-      '<button class="filt" data-filter="held" onclick="setFilter(\'held\',this)">Held ('+currentNfts.filter(n=>n.status==='held').length+')</button>'+
-      (noCidCount>0?'<button class="filt" data-filter="no-cid" onclick="setFilter(\'no-cid\',this)">No CID ('+noCidCount+')</button>':'')+
+      '<button class="filt" data-filter="sold" onclick="setFilter(\'sold\',this)">Sold ('+soldCount+')</button>'+
+      '<button class="filt" data-filter="held" onclick="setFilter(\'held\',this)">Held ('+heldCount+')</button>'+
       '<button class="filt green" data-filter="saved" id="saved-filt" onclick="setFilter(\'saved\',this)" style="display:none">[◆ saved] (0)</button>'+
       '<span style="opacity:.3;font-family:var(--mono);font-size:10px;padding:0 6px">|</span>'+
       '<button class="chain-filt" id="cf-all" onclick="setChainFilter(\'all\',this)">All chains</button>'+
@@ -947,12 +931,8 @@ function showResults(nfts){
     '</div>'+
     '<div id="collections-wrap">'+groupsHtml+'</div>'+
     archivedSection+
-    (spam.length>0
-      ?'<div id="spam-section" style="display:none;margin-top:1rem;padding:1rem;background:rgba(155,42,42,0.07);border:.5px solid rgba(155,42,42,0.25);border-radius:var(--r2)">'+
-          '<div style="font-family:var(--mono);font-size:11px;color:#e06060;margin-bottom:.75rem">['+spam.length+' suspected spam hidden] — These were hidden because Alchemy or metadata signals suggest they may be spam. They were minted to your wallet but may not be yours.</div>'+
-          '<div class="nftgrid">'+spam.map((n,si)=>{const i=currentNfts.length+si;n._idx=i;const card=nftCard(n,i,currentNfts.length+spam.length);return card.replace('class="nftcard"','class="nftcard" data-spam="true"');}).join('')+'</div>'+
-        '</div>'
-      :'');
+'';
+  // spam is now part of secondarySection above
 
   // Reset chain filter buttons to 'all'
   setTimeout(()=>{
@@ -1112,7 +1092,8 @@ function isVisibleByCurrentFilters(n,i){
   const hasCid=!!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media));
   const idx=n._idx!==undefined?n._idx:i;
   const isPinned=pinned.has(idx);
-  if(STRICT_MODE&&n.isBulk)return false;
+  // Secondary NFTs are hidden by default — not shown in primary grid
+  if(!n.isPrimary)return false;
   if(activeChain&&activeChain!=='all'&&chain!==activeChain.toLowerCase())return false;
   if(activeFilter==='listed')return n.status==='listed';
   if(activeFilter==='sold')return n.status==='sold'||n.status==='burned';
