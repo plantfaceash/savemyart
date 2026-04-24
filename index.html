@@ -695,6 +695,7 @@ function hasCidFn(n){
 }
 function looksBulk(n){
   const title=n.title||'';
+  // #NNN pattern in title = generative/bulk series
   return /#[0-9]{3,}/.test(title)||
     (n.collectionCount&&n.collectionCount>150)||
     (n.totalSupply&&n.totalSupply>150);
@@ -702,9 +703,15 @@ function looksBulk(n){
 function looksSpam(n){
   const title=(n.title||'').toLowerCase();
   const desc=(n.description||'').toLowerCase();
-  return n.isSpam===true||
-    /claim|airdrop|reward|voucher|bonus|free mint|visit|token/i.test(title)||
-    /claim|airdrop|reward|voucher|bonus|free mint|visit/i.test(desc);
+  // Alchemy spam flag
+  if(n.isSpam===true)return true;
+  // Known spam patterns in title
+  if(/claim|airdrop|reward|voucher|bonus|free mint|visit|drop/i.test(title))return true;
+  // $ token symbol spam (e.g. $PENGU, $ARB, $JUP)
+  if(/\$[a-z]{2,10}/i.test(title))return true;
+  // Spam wording in description
+  if(/claim|airdrop|reward|voucher|bonus|free mint|visit/i.test(desc))return true;
+  return false;
 }
 function isPrimaryArtwork(n){
   if(!hasCidFn(n))return false;
@@ -715,10 +722,32 @@ function isPrimaryArtwork(n){
 function classifyNfts(nfts){
   const primary=[];
   const secondary=[];
+
+  // First pass: tag everything
   for(const n of nfts){
     n.isBulk=looksBulk(n);
     n.isSpam=looksSpam(n);
     n.isPrimary=isPrimaryArtwork(n);
+  }
+
+  // Second pass: detect collected editions
+  // If 2+ NFTs share the exact same title from the same contract = likely collected, not created
+  const titleContractCount={};
+  for(const n of nfts){
+    if(!n.isPrimary)continue;
+    const key=(n.contract||'')+':::'+(n.title||'').trim().toLowerCase();
+    titleContractCount[key]=(titleContractCount[key]||0)+1;
+  }
+
+  for(const n of nfts){
+    if(n.isPrimary){
+      const key=(n.contract||'')+':::'+(n.title||'').trim().toLowerCase();
+      if(titleContractCount[key]>1){
+        // Multiple tokens with same title from same contract = collected edition
+        n.isPrimary=false;
+        n.isCollectedEdition=true;
+      }
+    }
     if(n.isPrimary)primary.push(n);
     else secondary.push(n);
   }
