@@ -847,7 +847,7 @@ function showResults(nfts){
         (listedCount>0?'<button class="rb rbo" onclick="selectListed()">Select listed ('+listedCount+')</button>':'')+
         '<button class="rb rbo" onclick="dlAll()">Download all [JSON]</button>'+
         '<button class="rb rbo" onclick="shareRescued()"><svg style="width:11px;height:11px;fill:currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.73-8.835L1.254 2.25H8.08l4.259 5.629L18.244 2.25z"/></svg> Share</button>'+
-        '<button class="reopen-btn" onclick="showResultsModal()" title="What does this all mean?">[?] guide</button>'+
+        '<button class="reopen-btn" onclick="showResultsModal(true)" title="What does this all mean?">[?] guide</button>'+
       '</div>'+
     '</div>'+
     '<div class="filter-bar">'+
@@ -975,8 +975,9 @@ function cidkeeper(){window.open('https://cidkeeper.valipokkann.in','_blank','no
 function openUrl(i,url){window.open(url,'_blank','noopener');}
 
 /* RESULTS INFO MODAL */
-function showResultsModal(){document.getElementById('results-modal').classList.add('open');}
-function dismissResultsModal(){document.getElementById('results-modal').classList.remove('open');}
+function showResultsModal(force){
+  if(!force&&localStorage.getItem('sma_modal_seen'))return;document.getElementById('results-modal').classList.add('open');}
+function dismissResultsModal(){document.getElementById('results-modal').classList.remove('open');localStorage.setItem('sma_modal_seen','1');}
 
 /* OPEN ON FOUNDATION - batch delist helper */
 let fndOpenedSet=new Set();
@@ -1363,6 +1364,7 @@ window.addEventListener('beforeunload',(e)=>{
         <p style="font-size:12.5px;color:var(--t1);line-height:1.65;margin-top:4px">Once you close this tab, you will need to rescan. For a permanent record, create your own free <a href="https://pinata.cloud" target="_blank" rel="noopener" style="color:var(--gold)">Pinata account</a> and pin your own copies there too.</p>
       </div>
       <hr class="rinfo-sep">
+      <div style="font-family:var(--mono);font-size:11px;color:#5dba85;padding:8px 0 4px 0;letter-spacing:.04em">[safe] = pinned to IPFS. Backed up independently of Foundation.</div>
       <div class="rinfo-row">
         <span class="rinfo-badge sb-held">[held]</span>
         <span class="rinfo-text">You own this. Pin it free.</span>
