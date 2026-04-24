@@ -28,8 +28,10 @@ export default async function handler(req, res) {
   const KEY = process.env.ALCHEMY_API_KEY;
   if (!KEY) return res.status(500).json({ error: 'Not configured' });
 
-  const RPC = `https://eth-mainnet.g.alchemy.com/v2/${KEY}`;
-  const NFT = `https://eth-mainnet.g.alchemy.com/nft/v3/${KEY}`;
+  const RPC     = `https://eth-mainnet.g.alchemy.com/v2/${KEY}`;
+  const NFT     = `https://eth-mainnet.g.alchemy.com/nft/v3/${KEY}`;
+  const RPC_BASE = `https://base-mainnet.g.alchemy.com/v2/${KEY}`;
+  const NFT_BASE = `https://base-mainnet.g.alchemy.com/nft/v3/${KEY}`;
 
   // ENS resolution
   let resolvedAddress = input;
@@ -58,40 +60,49 @@ export default async function handler(req, res) {
 
   try {
     // Get exact minted (contract, tokenId) pairs — from=0x0 means minted to wallet
+    // Run Ethereum and Base in parallel
     const mintedTokens = [];
-    let pageKey = '';
-    do {
-      const params = {
-        fromBlock: '0xB00000',
-        toBlock: 'latest',
-        fromAddress: '0x0000000000000000000000000000000000000000',
-        toAddress: resolvedAddress,
-        category: ['erc721'],
-        withMetadata: false,
-        excludeZeroValue: false,
-        maxCount: '0x3e8',
-      };
-      if (pageKey) params.pageKey = pageKey;
-      const data = await rpc(RPC, 'alchemy_getAssetTransfers', [params]);
-      for (const tx of (data?.transfers || [])) {
-        const contract = tx.rawContract?.address?.toLowerCase();
-        if (!contract) continue;
-        const rawId = tx.erc721TokenId || tx.tokenId;
-        const tokenId = rawId ? parseInt(rawId, 16).toString() : null;
-        if (!tokenId) continue;
-        mintedTokens.push({ contract, tokenId });
-      }
-      pageKey = data?.pageKey || '';
-    } while (pageKey);
+
+    async function fetchMints(rpcUrl, chain) {
+      let pageKey = '';
+      do {
+        const params = {
+          fromBlock: '0x0',
+          toBlock: 'latest',
+          fromAddress: '0x0000000000000000000000000000000000000000',
+          toAddress: resolvedAddress,
+          category: ['erc721'],
+          withMetadata: false,
+          excludeZeroValue: false,
+          maxCount: '0x3e8',
+        };
+        if (pageKey) params.pageKey = pageKey;
+        const data = await rpc(rpcUrl, 'alchemy_getAssetTransfers', [params]);
+        for (const tx of (data?.transfers || [])) {
+          const contract = tx.rawContract?.address?.toLowerCase();
+          if (!contract) continue;
+          const rawId = tx.erc721TokenId || tx.tokenId;
+          const tokenId = rawId ? parseInt(rawId, 16).toString() : null;
+          if (!tokenId) continue;
+          mintedTokens.push({ contract, tokenId, chain });
+        }
+        pageKey = data?.pageKey || '';
+      } while (pageKey);
+    }
+
+    await Promise.all([
+      fetchMints(RPC, 'eth'),
+      fetchMints(RPC_BASE, 'base'),
+    ]);
 
     if (mintedTokens.length === 0) {
       return res.status(200).json({ nfts: [], count: 0 });
     }
 
-    // Deduplicate
+    // Deduplicate — key includes chain so same tokenId on eth+base both show
     const seen = new Set();
-    const uniqueTokens = mintedTokens.filter(({ contract, tokenId }) => {
-      const key = `${contract}-${tokenId}`;
+    const uniqueTokens = mintedTokens.filter(({ contract, tokenId, chain }) => {
+      const key = `${contract}-${tokenId}-${chain}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -100,17 +111,20 @@ export default async function handler(req, res) {
     // Fetch metadata for each exact token only
     const results = new Map();
     for (let i = 0; i < uniqueTokens.length; i += 20) {
-      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId }) => {
-        const key = `${contract}-${tokenId}`;
+      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
+        const key = `${contract}-${tokenId}-${chain}`;
+        const nftBase = chain === 'base' ? NFT_BASE : NFT;
         try {
           const data = await fetchJSON(
-            `${NFT}/getNFTMetadata?contractAddress=${contract}&tokenId=${tokenId}`
+            `${nftBase}/getNFTMetadata?contractAddress=${contract}&tokenId=${tokenId}`
           );
-          results.set(key, fmtNFT(data, contract, tokenId));
+          const nft = fmtNFT(data, contract, tokenId);
+          nft.chain = chain;
+          results.set(key, nft);
         } catch {
           results.set(key, {
             title: `Token #${tokenId}`, tokenId, contract,
-            chain: 'eth', cid_meta: null, cid_media: null,
+            chain, cid_meta: null, cid_media: null,
             has_cid: false, display_cid: null, image: null, status: 'unknown',
           });
         }
@@ -119,13 +133,14 @@ export default async function handler(req, res) {
 
     // Check current owner per token via ownerOf()
     for (let i = 0; i < uniqueTokens.length; i += 20) {
-      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId }) => {
-        const key = `${contract}-${tokenId}`;
+      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
+        const key = `${contract}-${tokenId}-${chain}`;
         const nft = results.get(key);
         if (!nft) return;
+        const rpcUrl = chain === 'base' ? RPC_BASE : RPC;
         try {
           const tokenHex = BigInt(tokenId).toString(16).padStart(64, '0');
-          const result = await rpc(RPC, 'eth_call', [
+          const result = await rpc(rpcUrl, 'eth_call', [
             { to: contract, data: OWNER_OF + tokenHex },
             'latest',
           ]);
