@@ -735,10 +735,11 @@ function isPrimaryArtwork(n){
   // Known Foundation shared/factory contracts — treat as primary
   if(FOUNDATION_SHARED.has(contract))return true;
 
-  // No deployer info returned — can't tell, keep as primary (better to show than hide)
-  if(!deployer)return true;
+  // No wallet to compare against — show it (unauthenticated state)
+  if(!wallet)return true;
 
-  // Deployer is someone else — likely collected/received, not the artist's own work
+  // No deployer info AND we have a wallet — send to secondary, can't verify
+  // This is stricter but prevents collected/airdropped work flooding primary
   return false;
 }
 function classifyNfts(nfts){
