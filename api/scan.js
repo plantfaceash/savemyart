@@ -196,6 +196,11 @@ function fmtNFT(nft, contractFallback, tokenIdFallback) {
     || extractCID(nft.image?.cachedUrl)
     || null;
   const hasCid = Boolean(metaCID || mediaCID);
+
+  // Spam detection using Alchemy's spamInfo field
+  const spamInfo = nft.contract?.spamInfo || nft.spamInfo || {};
+  const isSpam = spamInfo.isSpam === true || spamInfo.isSpam === 'true';
+
   return {
     title: nft.name || nft.rawMetadata?.name || `Token #${nft.tokenId || tokenIdFallback}`,
     tokenId: nft.tokenId || tokenIdFallback,
@@ -207,6 +212,7 @@ function fmtNFT(nft, contractFallback, tokenIdFallback) {
     display_cid: metaCID || mediaCID || null,
     image: nft.image?.cachedUrl || nft.image?.originalUrl || null,
     status: 'unknown',
+    isSpam,
   };
 }
 
