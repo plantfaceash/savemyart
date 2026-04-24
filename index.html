@@ -209,6 +209,11 @@ h1 em{font-style:italic;color:var(--gold)}
 .chain-filt.eth-btn.active{border-color:#6b8cba;background:rgba(107,140,186,.12);color:#6b8cba}
 .chain-filt.base-btn.active{border-color:#0052ff;background:rgba(0,82,255,.12);color:#0052ff}
 
+
+/* SCANNING ANIMATION */
+@keyframes scanning-dots{0%{content:''}33%{content:'.'}66%{content:'..'}100%{content:'...'}}
+.scanning-anim::after{content:'';animation:scanning-dots 1.2s steps(1,end) infinite}
+
 /* BACK TO TOP */
 .btt{position:fixed;bottom:24px;right:20px;z-index:200;font-family:var(--mono);font-size:12px;padding:7px 12px;border-radius:var(--r);border:.5px solid var(--gborder);background:var(--s1);color:#5dba85;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .25s;text-shadow:0 0 8px rgba(93,186,133,.4);box-shadow:0 0 12px rgba(93,186,133,.15)}
 .btt.visible{opacity:1;pointer-events:auto}
@@ -223,6 +228,7 @@ h1 em{font-style:italic;color:var(--gold)}
 .filt.active.green{border-color:var(--gborder);color:#5dba85;background:var(--greenbg)}
 .filter-count{font-family:var(--mono);font-size:11px;color:var(--t2);margin-left:auto;white-space:nowrap}
 .nftcard.hidden{display:none!important}
+.coll-group.hidden{display:none!important}
 
 /* COLLECTION GROUP */
 .coll-group{margin-bottom:1.5rem}
@@ -416,6 +422,22 @@ footer{padding:1.4rem clamp(1rem,4vw,2.5rem);display:flex;justify-content:space-
 
 .clr-saved{font-family:var(--mono);font-size:11px;color:var(--t2);background:none;border:none;cursor:pointer;padding:4px 8px;opacity:.6}
 .clr-saved:hover{opacity:1;color:#e06060}
+
+/* WATERMARK — pure CSS, no JS dependency, always visible */
+body::before{
+  content:'[◆] savemyart.xyz';
+  position:fixed;
+  bottom:50%;right:50%;
+  transform:translate(50%,50%) rotate(-35deg);
+  font-family:var(--mono,monospace);
+  font-size:clamp(28px,5vw,64px);
+  color:rgba(93,186,133,0.04);
+  white-space:nowrap;
+  pointer-events:none;
+  z-index:0;
+  letter-spacing:.1em;
+  user-select:none;
+}
 </style>
 </head>
 <body>
@@ -458,7 +480,7 @@ footer{padding:1.4rem clamp(1rem,4vw,2.5rem);display:flex;justify-content:space-
 <div class="swrap" id="rescue">
   <div class="scard">
     <div class="sc-title">Find and rescue your Foundation art</div>
-    <div class="sc-sub">Enter your wallet address. We scan Foundation's contracts and show every piece you've ever minted: listed, sold, and held.</div>
+    <div class="sc-sub">Enter your wallet address. We scan Ethereum and Base for NFTs minted to your wallet, then show the pieces with IPFS metadata we can preserve. Suspected spam is hidden for review.</div>
     <label class="sc-lbl" for="wallet-addr">Your wallet address</label>
     <div class="sc-row">
       <input class="addrinput" id="wallet-addr" type="text" placeholder="0x... or yourname.eth" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')doRescue()">
@@ -592,7 +614,7 @@ footer{padding:1.4rem clamp(1rem,4vw,2.5rem);display:flex;justify-content:space-
       </div>
       <div class="hsteps">
         <div class="hs"><span class="sn">[01]</span><div class="hst"><h4>Enter your wallet address</h4><p>Paste your public address or connect your wallet. We never ask you to sign anything. No transaction. Nothing spent.</p></div></div>
-        <div class="hs"><span class="sn">[02]</span><div class="hst"><h4>We find every Foundation NFT you've ever minted</h4><p>We scan Foundation's shared contract and your personal collection contracts. This finds everything: held pieces, listed pieces, and sold pieces.</p></div></div>
+        <div class="hs"><span class="sn">[02]</span><div class="hst"><h4>We find rescuable NFTs minted to your wallet</h4><p>We scan Ethereum and Base for mint records, then look for IPFS metadata and media CIDs we can back up. This finds everything: held pieces, listed pieces, and sold pieces.</p></div></div>
         <div class="hs"><span class="sn">[03]</span><div class="hst"><h4>Pin your files free</h4><p>Click "Pin all free" and we handle everything server-side via Pinata. Your files get pinned to IPFS via Pinata, independent of Foundation's servers. Free, permanent, no cost to you.</p></div></div>
         <div class="hs"><span class="sn">[04]</span><div class="hst"><h4>Delist listed pieces if needed</h4><p>If you want to move listed pieces to a new platform, delist them on Foundation first using the Delist button on each card. Foundation is building a bulk tool. Until then, open listings one at a time. Each delist requires a small gas fee.</p></div></div>
         <div class="hs"><span class="sn">[05]</span><div class="hst"><h4>Move forward</h4><p>Art safe. List on Zora or Manifold today. Or wait for canvas, a new platform being built right now with zero fees, forever.</p></div></div>
@@ -652,18 +674,37 @@ async function connectWallet(){
 
 /* SCAN */
 const STEPS=[
-  'Querying Foundation shared contract for your early pieces',
-  'Finding your personal collection contracts',
-  'Fetching all tokens across your collections',
-  'Retrieving IPFS metadata and current ownership status'
+  'Scanning Ethereum for NFTs minted to your wallet',
+  'Scanning Base for NFTs minted to your wallet',
+  'Fetching IPFS metadata for each piece',
+  'Checking current ownership status'
 ];
 let currentNfts=[];
 let pinnedCount=0;
 let pinnableCount=0;
 const pinned=new Set();
+const pinInFlight=new Set(); // prevent duplicate pin calls
+let currentPinBatchTotal=0; // denominator for pin progress bar
+let currentPinBatchDone=0;  // tracks completion within active batch
 let selectedCards=new Set();
 let currentWallet='';
 let activeChain='all';
+let STRICT_MODE=true; // show only likely Foundation-style NFTs by default
+
+/* HEURISTICS */
+function isLikelyFoundation(nft){
+  const title=nft.title||'';
+  // Exclude if title looks like generative series (#001, #0001 etc)
+  if(/#[0-9]{3,}/.test(title))return false;
+  // Exclude known spam
+  if(nft.isSpam)return false;
+  // Must have CID
+  if(!(nft.has_cid!==undefined?nft.has_cid:(nft.cid_meta||nft.cid_media)))return false;
+  return true;
+}
+function isBulkCollection(nft){
+  return /#[0-9]{3,}/.test(nft.title||'');
+}
 
 /* LOCAL STORAGE SESSION */
 function lsKey(wallet){return 'sma_pins_'+wallet.toLowerCase();}
@@ -672,10 +713,11 @@ function loadSaved(wallet){
   try{return JSON.parse(localStorage.getItem(lsKey(wallet))||'{}');}
   catch{return {};}
 }
-function savePin(wallet,contract,tokenId,cid,title){
+function savePin(wallet,chain,contract,tokenId,cid,title){
   if(!wallet)return;
   const saved=loadSaved(wallet);
-  saved[contract+'-'+tokenId]={contract,tokenId,cid,title,ts:Date.now()};
+  const key=(chain||'eth')+':'+contract+':'+tokenId;
+  saved[key]={chain:chain||'eth',contract,tokenId,cid,title,ts:Date.now()};
   localStorage.setItem(lsKey(wallet),JSON.stringify(saved));
 }
 function clearSaved(wallet){
@@ -694,7 +736,7 @@ function doRescue(){
   pinnedCount=0;activeFilter='all';activeChain='all';fndOpenedSet.clear();
   currentWallet=v;
   const btn=document.getElementById('rescue-btn');
-  btn.disabled=true;btn.textContent='Scanning...';
+  btn.disabled=true;btn.textContent='Scanning';btn.classList.add('scanning-anim');
   document.getElementById('completion-area').innerHTML='';
   document.getElementById('what-next').style.display='none';
   document.getElementById('canvas-teaser').style.display='none';
@@ -702,7 +744,7 @@ function doRescue(){
   document.getElementById('results-area').innerHTML=`
     <div class="scanning">
       <div class="sring"></div>
-      <div class="stext">Scanning all Foundation contracts for <span class="saddr">${sh}</span></div>
+      <div class="stext">Scanning Ethereum and Base for <span class="saddr">${sh}</span></div>
       <div style="font-family:var(--mono);font-size:11px;color:var(--t2);margin-top:3px">[read-only] [no gas] [no signing]</div>
       <div style="font-family:var(--mono);font-size:11px;color:var(--t2);margin-top:6px;opacity:.6">Large collections may take a minute. Worth the wait.</div>
       <div class="ssteps">${STEPS.map((s,i)=>`<div class="sstep" id="ss${i}"><span class="si">...</span>${s}</div>`).join('')}</div>
@@ -715,18 +757,22 @@ function doRescue(){
   },600);
 
   fetch('/api/scan?address='+encodeURIComponent(v))
-    .then(r=>r.json())
+    .then(async r=>{
+      const data=await r.json().catch(()=>({error:'Scan failed. Please try again.'}));
+      if(!r.ok||data.error)throw new Error(data.error||'Scan failed. Please try again.');
+      return data;
+    })
     .then(data=>{
       clearInterval(stepIv);
       STEPS.forEach((_,idx)=>document.getElementById('ss'+idx)?.classList.add('done'));
-      btn.disabled=false;btn.textContent='Rescue my art';
+      btn.disabled=false;btn.textContent='Rescue my art';btn.classList.remove('scanning-anim');
       if(data.nfts&&data.nfts.length>0){
         setTimeout(()=>showResults(data.nfts),300);
       } else {
         document.getElementById('results-area').innerHTML=`
           <div class="scanning">
-            <p class="stext">No Foundation NFTs found for this address.</p>
-            <p style="font-size:13px;color:var(--t2);margin-top:8px">Double-check your wallet address and try again. ENS names (name.eth) are supported too.</p>
+            <p class="stext">No rescuable NFTs with IPFS data found for this address.</p>
+            <p style="font-size:13px;color:var(--t2);margin-top:8px">Double-check your wallet address and try again. ENS names (name.eth) are supported.</p>
           </div>`;
         document.getElementById('completion-area').innerHTML='';
         document.getElementById('what-next').style.display='none';
@@ -735,14 +781,15 @@ function doRescue(){
     })
     .catch(err=>{
       clearInterval(stepIv);
-      btn.disabled=false;btn.textContent='Rescue my art';
+      btn.disabled=false;btn.textContent='Rescue my art';btn.classList.remove('scanning-anim');
       currentNfts=[];selectedCards.clear();pinned.clear();pinnedCount=0;activeFilter='all';
-      document.getElementById('results-area').innerHTML=`
-        <div class="scanning">
-          <p class="stext" style="color:#e06060">[scan failed]</p>
-          <p style="font-size:13px;color:var(--t2);margin-top:8px">Something went wrong. Check your address and try again.<br>If the problem persists, the network may be busy.</p>
-          <button class="btngold" style="margin-top:1rem" onclick="document.getElementById('results-area').innerHTML='';document.getElementById('wallet-addr').focus()">Try again</button>
-        </div>`;
+      const msg=err?.message||'Something went wrong. Check your address and try again.';
+      document.getElementById('results-area').innerHTML=
+        '<div class="scanning">'+
+          '<p class="stext" style="color:#e06060">[scan failed]</p>'+
+          '<p style="font-size:13px;color:var(--t2);margin-top:8px">'+escapeHtml(msg)+'</p>'+
+          '<button class="btngold" style="margin-top:1rem" onclick="resetScanUI()">Try again</button>'+
+        '</div>';
       console.error(err);
     });
 }
@@ -758,12 +805,17 @@ function showResults(nfts){
   const cleanNfts=nfts.filter(n=>n.isSpam!==true);
   // Sort: pinnable (has CID) first, no-CID last
   const statusOrder={held:0,listed:1,unknown:2,sold:3};
-  const withCid=cleanNfts.filter(n=>n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media)).sort((a,b)=>(statusOrder[a.status]||2)-(statusOrder[b.status]||2));
+  const rank=s=>statusOrder[s]??2;
+  const withCid=cleanNfts.filter(n=>n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media)).sort((a,b)=>rank(a.status)-rank(b.status));
   const noCid=cleanNfts.filter(n=>!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media)));
   // Rebuild currentNfts in sorted order so indices stay consistent
   currentNfts=[...withCid,...noCid];
-  // Reassign global indices
-  currentNfts.forEach((n,i)=>n._idx=i);
+  // Tag bulk collections and likely Foundation pieces
+  currentNfts.forEach((n,i)=>{
+    n._idx=i;
+    n.isBulk=isBulkCollection(n);
+    n.isLikelyFnd=isLikelyFoundation(n);
+  });
 
   const total=currentNfts.length;
   const listedCount=currentNfts.filter(n=>n.status==='listed').length;
@@ -774,22 +826,24 @@ function showResults(nfts){
   // Build collection groups for PINNABLE section
   const groups={};
   withCid.forEach((n)=>{
-    const key=n.contract||'shared';
+    const key=(n.chain||'eth')+':'+( n.contract||'shared');
     if(!groups[key]){
-      groups[key]={name:n.title.replace(/ ?#\d+$/,'').trim()||'Collection',tokens:[]};
+      groups[key]={name:n.title.replace(/ ?#\d+$/,'').trim()||'Collection',tokens:[],chain:n.chain||'eth',contract:n.contract||'shared'};
     }
     groups[key].tokens.push(n);
   });
 
-  const groupsHtml=Object.entries(groups).map(([contract,g],idx)=>{
-    const gid='grp-'+contract.slice(2,10);
+  const groupsHtml=Object.entries(groups).map(([groupKey,g],idx)=>{
+    const safeId=groupKey.replace(/[^a-zA-Z0-9_-]/g,'-');
+    const gid='grp-'+safeId;
     const lazy=idx>=2;
-    const groupChain=g.tokens[0]?.chain||'eth';
     const cards=lazy?'':g.tokens.map(n=>nftCard(n,n._idx,total)).join('');
-    return '<div class="coll-group'+(lazy?' collapsed':'')+'" id="'+gid+'"'+
+    const bulkGroup=g.tokens.some(n=>n.isBulk);
+    return '<div class="coll-group'+(lazy?' collapsed':'')+(bulkGroup&&STRICT_MODE?' hidden':'')+'" id="'+gid+'"'+
       ' data-lazy="'+(lazy?'true':'false')+'"'+
-      ' data-chain="'+groupChain+'"'+
-      ' data-contract="'+contract+'">'+
+      ' data-bulk="'+(bulkGroup?'true':'false')+'"'+
+      ' data-chain="'+g.chain+'"'+
+      ' data-contract="'+g.contract+'">'+
       '<div class="coll-header" onclick="toggleGroup(\''+gid+'\')">'+
         '<span class="coll-name">'+g.name+'</span>'+
         '<span class="coll-meta">['+g.tokens.length+' piece'+(g.tokens.length!==1?'s':'')+']</span>'+
@@ -802,21 +856,21 @@ function showResults(nfts){
   // Build archived section for NO-CID pieces
   const archivedGroups={};
   noCid.forEach((n)=>{
-    const key=n.contract||'shared';
+    const key=(n.chain||'eth')+':'+(n.contract||'shared');
     if(!archivedGroups[key]){
-      archivedGroups[key]={name:n.title.replace(/ ?#\d+$/,'').trim()||'Collection',tokens:[]};
+      archivedGroups[key]={name:n.title.replace(/ ?#\d+$/,'').trim()||'Collection',tokens:[],chain:n.chain||'eth',contract:n.contract||'shared'};
     }
     archivedGroups[key].tokens.push(n);
   });
-  const archivedGroupsHtml=Object.entries(archivedGroups).map(([contract,g],idx)=>{
-    const gid='arch-'+contract.slice(2,10);
+  const archivedGroupsHtml=Object.entries(archivedGroups).map(([groupKey,g],idx)=>{
+    const safeId=groupKey.replace(/[^a-zA-Z0-9_-]/g,'-');
+    const gid='arch-'+safeId;
     const lazy=idx>=1;
-    const groupChain=g.tokens[0]?.chain||'eth';
     const cards=lazy?'':g.tokens.map(n=>nftCard(n,n._idx,total)).join('');
     return '<div class="coll-group'+(lazy?' collapsed':'')+'" id="'+gid+'"'+
       ' data-lazy="'+(lazy?'true':'false')+'"'+
-      ' data-chain="'+groupChain+'"'+
-      ' data-contract="'+contract+'" data-archived="true">'+
+      ' data-chain="'+g.chain+'"'+
+      ' data-contract="'+g.contract+'" data-archived="true">'+
       '<div class="coll-header" onclick="toggleGroup(\''+gid+'\')">'+
         '<span class="coll-name">'+g.name+'</span>'+
         '<span class="coll-meta">['+g.tokens.length+' piece'+(g.tokens.length!==1?'s':'')+']</span>'+
@@ -853,13 +907,17 @@ function showResults(nfts){
 
   document.getElementById('results-area').innerHTML=
     '<div class="reshdr">'+
+      '<div class="usage-warn" style="font-family:var(--mono);font-size:11px;color:var(--t2);padding:8px 12px;background:var(--s2);border-radius:var(--r2);margin-bottom:12px;line-height:1.6">'+
+        'This tool is for artists backing up their own Foundation artworks. Pins confirmed by Pinata. '+
+        '<button onclick="STRICT_MODE=!STRICT_MODE;applyStrictMode()" id="strict-toggle" style="font-family:var(--mono);font-size:11px;background:none;border:none;cursor:pointer;color:var(--gold);padding:0;text-decoration:underline">'+(STRICT_MODE?'Bulk collections hidden — show all':'Showing all NFTs — hide bulk collections')+'</button>'+
+      '</div>'+
       '<div class="resfound">'+
-        '<h2>Found <em>'+total+' work'+(total!==1?'s':'')+'</em> from Foundation</h2>'+
-        '<p>'+Object.keys(groups).length+' collection'+(Object.keys(groups).length!==1?'s':'')+' · '+withCidCount+' pinnable · '+(noCidCount>0?noCidCount+' no CID · ':'')+listedCount+' listed'+(spam.length>0?' · <button onclick="document.getElementById(\'spam-section\').style.display=\'\'" style="font-family:var(--mono);font-size:11px;color:#e06060;background:none;border:none;cursor:pointer;padding:0;text-decoration:underline">'+spam.length+' suspected spam hidden</button>':'')+' </p>'+
+        '<h2>Found <em>'+total+' minted NFT'+(total!==1?'s':'')+'</em> · <span style="color:#5dba85">'+withCidCount+' pinnable</span></h2>'+
+        '<p>'+Object.keys(groups).length+' collection'+(Object.keys(groups).length!==1?'s':'')+' · '+withCidCount+' with IPFS data · '+(noCidCount>0?noCidCount+' no CID · ':'')+listedCount+' listed'+(spam.length>0?' · <button onclick="document.getElementById(\'spam-section\').style.display=\'\'" style="font-family:var(--mono);font-size:11px;color:#e06060;background:none;border:none;cursor:pointer;padding:0;text-decoration:underline">'+spam.length+' suspected spam hidden</button>':'')+' </p>'+
       '</div>'+
       '<div class="resacts">'+
         '<button class="rb rbg" id="pin-all-btn" onclick="pinAll()">Pin all free</button>'+
-        '<button class="rb rba" onclick="selectAll()">Select all</button>'+
+        '<button class="rb rba" onclick="selectAll()">Select visible</button>'+
         (hasSaved(currentWallet)?'<button class="rb" onclick="doClearSaved()" style="opacity:.6;font-size:11px">[clear saved]</button>':'')+
         (listedCount>0?'<button class="rb rbo" onclick="selectListed()">Select listed ('+listedCount+')</button>':'')+
         '<button class="rb rbo" onclick="dlAll()">Download all [JSON]</button>'+
@@ -884,14 +942,14 @@ function showResults(nfts){
     '</div>'+
     delistBar+
     '<div id="progress-wrap" style="display:none" class="pin-progress">'+
-      '<div class="pp-label">Pinning your art to permanent storage...<span id="pp-count">0 / '+total+'</span></div>'+
+      '<div class="pp-label">Pinning your art to permanent storage...<span id="pp-count">0 / '+pinnableCount+'</span></div>'+
       '<div class="pp-bar"><div class="pp-fill" id="pp-fill"></div></div>'+
     '</div>'+
     '<div id="collections-wrap">'+groupsHtml+'</div>'+
     archivedSection+
     (spam.length>0
       ?'<div id="spam-section" style="display:none;margin-top:1rem;padding:1rem;background:rgba(155,42,42,0.07);border:.5px solid rgba(155,42,42,0.25);border-radius:var(--r2)">'+
-          '<div style="font-family:var(--mono);font-size:11px;color:#e06060;margin-bottom:.75rem">['+spam.length+' suspected spam] — Alchemy flagged these as spam contracts. They were minted to your wallet but may not be yours.</div>'+
+          '<div style="font-family:var(--mono);font-size:11px;color:#e06060;margin-bottom:.75rem">['+spam.length+' suspected spam hidden] — These were hidden because Alchemy or metadata signals suggest they may be spam. They were minted to your wallet but may not be yours.</div>'+
           '<div class="nftgrid">'+spam.map((n,si)=>{const i=currentNfts.length+si;n._idx=i;const card=nftCard(n,i,currentNfts.length+spam.length);return card.replace('class="nftcard"','class="nftcard" data-spam="true"');}).join('')+'</div>'+
         '</div>'
       :'');
@@ -904,6 +962,7 @@ function showResults(nfts){
   },200);
   setTimeout(()=>document.getElementById('results-area').scrollIntoView({behavior:'smooth',block:'start'}),150);
   setTimeout(()=>showResultsModal(),500);
+  setTimeout(()=>applyStrictMode(),50); // apply strict mode immediately after render
   setTimeout(()=>toast('['+total+' works found, '+Object.keys(groups).length+' collections]'),300);
   // Pre-mark previously saved pins from localStorage
   setTimeout(()=>{
@@ -912,7 +971,7 @@ function showResults(nfts){
     if(savedKeys.length===0)return;
     let restoredCount=0;
     currentNfts.forEach((n,i)=>{
-      const key=(n.contract||'')+'-'+(n.tokenId||'');
+      const key=(n.chain||'eth')+':'+(n.contract||'')+ ':'+(n.tokenId||'');
       if(!saved[key]||pinned.has(i))return;
       pinned.add(i);
       restoredCount++;
@@ -940,18 +999,20 @@ function showResults(nfts){
 function nftCard(n,i,total){
   const grads=['g1','g2','g3','g4','g5','g6'];
   const grad=grads[i%grads.length];
-  const sc={'held':'sb-held','listed':'sb-listed','sold':'sb-sold','unknown':'sb-backup'}[n.status]||'sb-backup';
-  const sl={'held':'[held]','listed':'[listed]','sold':'[sold]','unknown':'[needs backup]'}[n.status]||'[needs backup]';
+  const alreadyPinned=pinned.has(i);
+  const sc=alreadyPinned?'sb-safe':({'held':'sb-held','listed':'sb-listed','sold':'sb-sold','burned':'sb-backup','unknown':'sb-backup'}[n.status]||'sb-backup');
+  const sl=alreadyPinned?'[safe]':({'held':'[held]','listed':'[listed]','sold':'[sold]','burned':'[burned]','unknown':'[needs backup]'}[n.status]||'[needs backup]');
   // Single source of truth: use server-provided has_cid/display_cid, fall back to derived
   const hasCid=!!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media));
   const displayCid=n.display_cid||n.cid_meta||n.cid_media||null;
   const cidLabel=displayCid?displayCid.slice(0,24)+'...':'No IPFS data. Cannot pin.';
   const chain=n.chain||'eth';
   const fndUrl='https://foundation.app/mint/'+chain+'/'+n.contract+'/'+n.tokenId;
-  // Detect video NFTs via animation_url or extension
-  const animUrl=n.rawMetadata?.animation_url||'';
-  const isVideo=!!(animUrl&&/\.(mp4|mov|webm|ogv|m4v)/i.test(animUrl))||
-    !!(n.cid_media&&/\.(mp4|mov|webm)/i.test(animUrl));
+  // FIX 6: Use server-provided is_video first (most reliable)
+  // Fall back to client-side extension check on animation_url
+  const animUrl=n.animation_url||'';
+  const isVideo=n.is_video===true||
+    !!(animUrl&&/\.(mp4|mov|webm|ogv|m4v)(\?|#|$)/i.test(animUrl));
   const videoUrl=animUrl||(n.cid_media?'https://ipfs.io/ipfs/'+n.cid_media:'');
   // Shimmer placeholder while image loads
   const shimmer='<div class="art-skeleton"></div>'+(n.image||isVideo?'<div class="art-loader">'+(isVideo?'[▶]':'[◆]')+'</div>':'');
@@ -966,10 +1027,12 @@ function nftCard(n,i,total){
   } else {
     lastBtn='<button class="nb nbeth" onclick="goEtherscan('+i+')" style="border-color:rgba(107,140,186,.4);color:#6b8cba">Etherscan</button>';
   }
-  const pinBtn=hasCid
-    ?'<button class="nb nbpin pulse-anim" id="pin-'+i+'" onclick="pinFromCard('+i+')">Pin free</button>'
-    :'<button class="nb nbpin" id="pin-'+i+'" disabled style="opacity:.3;cursor:not-allowed;animation:none">No CID</button>';
-  return '<div class="nftcard" id="card-'+i+'"'+
+  const pinBtn=alreadyPinned
+    ?'<button class="nb nbpin pinned" id="pin-'+i+'" disabled style="opacity:1;background:rgba(45,122,80,0.35)">[◆ saved]</button>'
+    :hasCid
+      ?'<button class="nb nbpin pulse-anim" id="pin-'+i+'" onclick="pinFromCard('+i+')">Pin free</button>'
+      :'<button class="nb nbpin" id="pin-'+i+'" disabled style="opacity:.3;cursor:not-allowed;animation:none">No CID</button>';
+  return '<div class="nftcard'+(alreadyPinned?' rescued':'')+'" id="card-'+i+'"'+
     ' data-idx="'+i+'" data-total="'+total+'"'+
     ' data-status="'+(n.status||'unknown')+'"'+
     ' data-hascid="'+hasCid+'"'+
@@ -1019,11 +1082,14 @@ function dismissResultsModal(){document.getElementById('results-modal').classLis
 /* OPEN ON FOUNDATION - batch delist helper */
 let fndOpenedSet=new Set();
 function openFoundationBatch(count){
-  // Collect unvisited listed cards
+  // Collect unvisited listed NFTs from data model (handles lazy/unrendered cards)
   const listedCards=[];
-  document.querySelectorAll('.nftcard[data-listed="1"]').forEach(card=>{
-    const i=parseInt(card.dataset.idx);
-    if(!fndOpenedSet.has(i)){listedCards.push({i,url:decodeURIComponent(card.dataset.fndurl||'')});}
+  currentNfts.forEach((n,i)=>{
+    if(n.status==='listed'&&!fndOpenedSet.has(i)){
+      const chain=n.chain||'eth';
+      const url='https://foundation.app/mint/'+chain+'/'+n.contract+'/'+n.tokenId;
+      listedCards.push({i,url});
+    }
   });
   if(listedCards.length===0){toast('All listed pieces have already been opened.');return;}
   const toOpen=listedCards.slice(0,count);
@@ -1040,6 +1106,31 @@ function openFoundationBatch(count){
 
 /* FILTER + GROUP */
 let activeFilter='all';
+
+function isVisibleByCurrentFilters(n,i){
+  const chain=(n.chain||'eth').toLowerCase();
+  const hasCid=!!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media));
+  const idx=n._idx!==undefined?n._idx:i;
+  const isPinned=pinned.has(idx);
+  if(STRICT_MODE&&n.isBulk)return false;
+  if(activeChain&&activeChain!=='all'&&chain!==activeChain.toLowerCase())return false;
+  if(activeFilter==='listed')return n.status==='listed';
+  if(activeFilter==='sold')return n.status==='sold'||n.status==='burned';
+  if(activeFilter==='held')return n.status==='held';
+  if(activeFilter==='needs-pinning')return hasCid&&!isPinned;
+  if(activeFilter==='no-cid')return !hasCid&&!isPinned;
+  if(activeFilter==='saved')return isPinned;
+  return true; // 'all'
+}
+
+function getVisiblePinnableCount(){
+  return currentNfts.filter((n,i)=>{
+    const idx=n._idx!==undefined?n._idx:i;
+    const hasCid=!!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media));
+    return hasCid&&!pinned.has(idx)&&isVisibleByCurrentFilters(n,i);
+  }).length;
+}
+
 function setFilter(f,btn){
   activeFilter=f;
   document.querySelectorAll('.filt').forEach(b=>{b.classList.remove('active','green');});
@@ -1048,36 +1139,35 @@ function setFilter(f,btn){
   applyFilter();
   document.getElementById('results-area').scrollIntoView({behavior:'smooth',block:'start'});
 }
+function applyStrictMode(){
+  // Update toggle button text
+  const btn=document.getElementById('strict-toggle');
+  if(btn)btn.textContent=STRICT_MODE?'Bulk collections hidden — show all':'Showing all NFTs — hide bulk collections';
+  // Show/hide bulk groups
+  document.querySelectorAll('.coll-group[data-bulk="true"]').forEach(g=>{
+    g.style.display=STRICT_MODE?'none':'';
+  });
+  applyFilter();
+}
+
 function setChainFilter(chain,btn){
   activeChain=chain;
   document.querySelectorAll('.chain-filt').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  // Show/hide collection groups by chain (handles lazy-rendered cards correctly)
+  // Show/hide groups by chain AND respect strict mode bulk hiding
   document.querySelectorAll('.coll-group').forEach(group=>{
     const groupChain=(group.dataset.chain||'eth').toLowerCase();
-    const show=chain==='all'||groupChain===chain.toLowerCase();
-    group.style.display=show?'':'none';
+    const isBulk=group.dataset.bulk==='true';
+    const showChain=chain==='all'||groupChain===chain.toLowerCase();
+    const showStrict=!(STRICT_MODE&&isBulk);
+    group.style.display=(showChain&&showStrict)?'':'none';
   });
   applyFilter();
 }
 
 function applyFilter(){
-  // Count from data array — handles lazy-rendered (not yet in DOM) cards correctly
-  const visible=currentNfts.filter(n=>{
-    const chain=(n.chain||'eth').toLowerCase();
-    const isPinned=pinned.has(n._idx);
-    const hasCid=!!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media));
-    // Chain filter
-    if(activeChain&&activeChain!=='all'&&chain!==activeChain.toLowerCase())return false;
-    // Status filter
-    if(activeFilter==='listed')return n.status==='listed';
-    if(activeFilter==='sold')return n.status==='sold';
-    if(activeFilter==='held')return n.status==='held';
-    if(activeFilter==='needs-pinning')return hasCid&&!isPinned;
-    if(activeFilter==='no-cid')return !hasCid&&!isPinned;
-    if(activeFilter==='saved')return isPinned;
-    return true; // 'all'
-  }).length;
+  // Count from data array using shared filter helper (respects strict mode + chain + status)
+  const visible=currentNfts.filter((n,i)=>isVisibleByCurrentFilters(n,i)).length;
 
   // Also hide/show rendered DOM cards that are already in the DOM
   document.querySelectorAll('.nftcard').forEach(card=>{
@@ -1111,8 +1201,14 @@ function toggleGroup(gid){
   // Lazy render: fill in cards on first expand
   if(!g.classList.contains('collapsed')&&g.dataset.lazy==='true'){
     const contract=g.dataset.contract;
+    const groupChain=g.dataset.chain||'eth';
     const isArchived=g.dataset.archived==='true';
-    const groupNfts=currentNfts.filter(n=>n.contract===contract&&(isArchived?(!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media))):!!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media))));
+    // FIX 3: filter by BOTH chain and contract to avoid cross-chain grouping bugs
+    const groupNfts=currentNfts.filter(n=>
+      n.contract===contract&&
+      (n.chain||'eth')===groupChain&&
+      (isArchived?(!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media))):!!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media)))
+    );
     const grid=g.querySelector('.coll-grid');
     if(grid&&groupNfts.length>0){
       grid.innerHTML=groupNfts.map(n=>nftCard(n,n._idx,currentNfts.length)).join('');
@@ -1137,11 +1233,11 @@ function selectAll(){
   const btn=document.querySelector('.rb.rba');
   if(anySelected){
     visible.forEach(i=>{selectedCards.delete(i);const el=document.getElementById('sel-'+i);if(el){el.textContent='';el.classList.remove('checked');}});
-    if(btn)btn.textContent='Select all';
+    if(btn)btn.textContent='Select visible';
     toast('Selection cleared');
   } else {
     visible.forEach(i=>{selectedCards.add(i);const el=document.getElementById('sel-'+i);if(el){el.textContent='✓';el.classList.add('checked');}});
-    if(btn)btn.textContent='Deselect all';
+    if(btn)btn.textContent='Deselect visible';
     toast(visible.length+' pieces selected. Click again to deselect.');
   }
 }
@@ -1156,22 +1252,24 @@ function selectListed(){
   });
   const count=currentNfts.filter(n=>n.status==='listed').length;
   const btn=document.querySelector('.rb.rba');
-  if(btn)btn.textContent='Deselect all';
+  if(btn)btn.textContent='Deselect visible';
   toast('['+count+' listed selected]. Pin free now. Use Delist buttons on each card for Foundation.');
 }
 
 /* PIN */
 async function pinOne(i,cm,cv,title,total){
   if(pinned.has(i))return;
+  if(pinInFlight.has(i))return; // prevent duplicate calls
+  pinInFlight.add(i);
   const btn=document.getElementById('pin-'+i);
-  // Disable immediately to prevent duplicate requests
-  btn.textContent='Pinning...';btn.style.opacity='.55';btn.disabled=true;btn.classList.remove('pulse-anim');
+  // Disable immediately to prevent duplicate requests (btn may be null if card is lazy/unrendered)
+  if(btn){btn.textContent='Pinning...';btn.style.opacity='.55';btn.disabled=true;btn.classList.remove('pulse-anim');}
 
   const MAX_RETRIES=3;
   for(let attempt=0;attempt<MAX_RETRIES;attempt++){
     try{
       if(attempt>0){
-        btn.textContent='Retrying...';
+        if(btn)btn.textContent='Retrying...';
         await new Promise(r=>setTimeout(r,1500*attempt));
       }
       const res=await fetch('/api/pin',{
@@ -1179,39 +1277,63 @@ async function pinOne(i,cm,cv,title,total){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({cidMeta:cm,cidMedia:cv,name:title})
       });
-      const data=await res.json();
-      if(data.success){markPinned(i,title,total);return;}
+      const data=await res.json().catch(()=>({}));
+      // Only mark saved if Pinata confirmed a real CID — no false saved states
+      const pinnedCid=data?.IpfsHash||data?.meta?.newCid||data?.media?.newCid||null;
+      if(res.ok&&data.success&&pinnedCid){markPinned(i,title,total,pinnedCid);return;}
+      if(res.ok&&data.success&&!pinnedCid){
+        // success flag but no CID returned — treat as failure to avoid false saved state
+        console.warn('Pin API returned success but no CID for',title);
+      }
       // Don't retry on non-network errors
-      if(res.status===400||res.status===500&&!data.error?.includes('busy'))break;
+      if(res.status===400||(res.status===500&&!data.error?.includes('busy')))break;
     }catch(e){
       if(attempt===MAX_RETRIES-1)break;
     }
   }
   // All retries failed
-  btn.textContent='Try again';btn.style.opacity='1';btn.disabled=false;
+  if(btn){btn.textContent='Try again';btn.style.opacity='1';btn.disabled=false;}
   toast('Pin failed. Network busy, try again shortly.');
+  pinInFlight.delete(i);
 }
 
-function markPinned(i,title,total){
+function markPinned(i,title,total,pinnedCid){
   pinned.add(i);pinnedCount++;
-  // Persist to localStorage
+  pinInFlight.delete(i); // clear in-flight flag
+  // Persist to localStorage — fall back to currentNfts[i] if card not in DOM (lazy/unrendered)
   const card=getCard(i);
-  if(card&&currentWallet){
-    const contract=card.dataset.contract||'';
-    const tokenId=card.dataset.tokenid||'';
-    const cid=decodeURIComponent(card.dataset.dc||card.dataset.cm||'');
-    savePin(currentWallet,contract,tokenId,cid,title);
+  const nft=currentNfts[i];
+  if(currentWallet){
+    const chain=card?.dataset.chain||nft?.chain||'eth';
+    const contract=card?.dataset.contract||nft?.contract||'';
+    const tokenId=card?.dataset.tokenid||nft?.tokenId||'';
+    // Use Pinata-confirmed CID first, fall back to pre-derived CID
+    const cid=pinnedCid||
+      (card
+        ?decodeURIComponent(card.dataset.dc||card.dataset.cm||'')
+        :(nft?.display_cid||nft?.cid_meta||nft?.cid_media||''));
+    if(contract&&tokenId){
+      savePin(currentWallet,chain,contract,tokenId,cid,title||(nft?.title||'Untitled'));
+    }
   }
   const btn=document.getElementById('pin-'+i);
-  btn.innerHTML='<a href="https://app.pinata.cloud/pinmanager" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">[◆ saved]</a>';
-  btn.className='nb nbpin pinned';btn.style.opacity='1';btn.style.background='rgba(45,122,80,0.35)';
-  document.getElementById('badge-'+i).className='sbadge sb-safe';
-  document.getElementById('badge-'+i).textContent='[safe]';
-  document.getElementById('card-'+i).classList.add('rescued');
+  if(btn){btn.innerHTML='<a href="https://app.pinata.cloud/pinmanager" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">[◆ saved]</a>';btn.className='nb nbpin pinned';btn.style.opacity='1';btn.style.background='rgba(45,122,80,0.35)';}
+  const badge=document.getElementById('badge-'+i);
+  if(badge){badge.className='sbadge sb-safe';badge.textContent='[safe]';}
+  const rescuedCard=document.getElementById('card-'+i);
+  if(rescuedCard)rescuedCard.classList.add('rescued');
   const fill=document.getElementById('pp-fill');
   const count=document.getElementById('pp-count');
-  if(fill)fill.style.width=(pinnedCount/total*100)+'%';
-  if(count)count.textContent=pinnedCount+' / '+total;
+  // Use batch tracking for progress when a batch is active
+  if(currentPinBatchTotal>0){
+    currentPinBatchDone++;
+    if(fill)fill.style.width=(currentPinBatchDone/currentPinBatchTotal*100)+'%';
+    if(count)count.textContent=currentPinBatchDone+' / '+currentPinBatchTotal;
+  } else {
+    const denom=pinnableCount||total;
+    if(fill)fill.style.width=(pinnedCount/denom*100)+'%';
+    if(count)count.textContent=pinnedCount+' / '+denom;
+  }
   toast('[◆] "'+title+'" pinned to IPFS. Files secured forever.');
   if(card){card.dataset.status='pinned';}
   // Update saved filter button
@@ -1219,26 +1341,59 @@ function markPinned(i,title,total){
   if(sf){sf.style.display='';sf.textContent='[◆ saved] ('+pinnedCount+')';}
   // Update pinnable filter count
   const pf=document.querySelector('.filt[data-filter="needs-pinning"]');
-  if(pf){const rem=pinnableCount-pinnedCount;pf.textContent='Pinnable ('+(rem>0?rem:0)+')';}
+  if(pf){const rem=getVisiblePinnableCount();pf.textContent='Pinnable ('+rem+')';}
   applyFilter();
-  if(pinnableCount>0&&pinnedCount>=pinnableCount)setTimeout(()=>showCompletion(pinnedCount),600);
+  // Completion: use batch tracking when active, fall back to global pinnableCount
+  if(currentPinBatchTotal>0){
+    if(currentPinBatchDone>=currentPinBatchTotal)setTimeout(()=>showCompletion(currentPinBatchDone),600);
+  } else if(pinnableCount>0&&pinnedCount>=pinnableCount){
+    setTimeout(()=>showCompletion(pinnedCount),600);
+  }
 }
 
-function pinAll(){
-  // Only pin cards that have CIDs and aren't already pinned
-  const pinnable=currentNfts.filter((n,i)=>!pinned.has(i)&&(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media)));
+const MAX_PIN_PER_SESSION=200;
+
+async function runWithLimit(items,limit,worker){
+  const queue=[...items];
+  const workers=Array.from({length:limit},async()=>{
+    while(queue.length){const item=queue.shift();await worker(item);}
+  });
+  await Promise.all(workers);
+}
+
+async function pinAll(){
+  // Only pin what is currently visible/allowed — uses shared filter helper
+  const pinnable=currentNfts.filter((n,i)=>{
+    if(pinned.has(n._idx!==undefined?n._idx:i))return false;
+    const hasCid=!!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media));
+    if(!hasCid)return false;
+    return isVisibleByCurrentFilters(n,i);
+  });
   const total=currentNfts.length;
   const pinnableTotal=pinnable.length;
   if(pinnableTotal===0){toast('All pieces are already pinned or have no CID to pin.');return;}
+  // Rate limit check
+  if(pinnableTotal>MAX_PIN_PER_SESSION){
+    alert('Too many items to pin at once ('+pinnableTotal+'). This tool is for artist portfolios. Filter your results or use "Select visible" to pin a smaller set.');
+    return;
+  }
+  currentPinBatchTotal=pinnable.length;
+  currentPinBatchDone=0;
   document.getElementById('progress-wrap').style.display='block';
+  const ppCount=document.getElementById('pp-count');
+  if(ppCount)ppCount.textContent='0 / '+currentPinBatchTotal;
   document.getElementById('pin-all-btn').disabled=true;
-  document.getElementById('pin-all-btn').textContent='Pinning '+pinnableTotal+'...';
-  let delay=0;
-  pinnable.forEach((n,idx)=>{
+  document.getElementById('pin-all-btn').textContent='Pinning '+pinnable.length+'...';
+  // Throttle to 6 concurrent pins
+  await runWithLimit(pinnable,6,async(n)=>{
     const i=currentNfts.indexOf(n);
-    setTimeout(()=>pinOne(i,n.cid_meta||'',n.cid_media||'',n.title||'Untitled',total),delay);
-    delay+=300;
+    await pinOne(i,n.cid_meta||'',n.cid_media||'',n.title||'Untitled',total);
   });
+  // Reset batch counters so later manual pins don't use stale progress
+  currentPinBatchTotal=0;
+  currentPinBatchDone=0;
+  document.getElementById('pin-all-btn').disabled=false;
+  document.getElementById('pin-all-btn').textContent='Pin all free';
 }
 
 function showCompletion(total){
@@ -1315,15 +1470,15 @@ function copyCID(cid,t){if(!cid)return;navigator.clipboard?.writeText(cid).then(
 
 /* SHARE */
 function shareOnX(){
-  const t='Foundation artists — your IPFS metadata will go dark when their servers shut down.\n\nThis free tool finds ALL your Foundation NFTs (listed, sold, and held) and backs them up in minutes.\n\nNo ETH. No gas. No wallet signing. No cost.\n\nsavemyart.xyz';
+  const t='Foundation artists — your IPFS metadata will go dark when their servers shut down.\n\nThis free tool finds rescuable Foundation-era NFTs with IPFS files minted to your wallet (listed, sold, and held) and backs them up in minutes.\n\nNo ETH. No gas. No wallet signing. No cost.\n\nsavemyart.xyz';
   window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(t),'_blank','noopener');
 }
 function shareRescued(){
-  const t='Just rescued all my Foundation art with this free tool.\n\nFinds every piece you\'ve ever minted — even listed and sold ones. Metadata pinned.\n\nIf you minted on Foundation, do this before April 2027.\nsavemyart.xyz';
+  const t='Just backed up my rescuable artwork files with this free tool.\n\nFinds rescuable Foundation-era NFTs with IPFS files minted to your wallet. Metadata pinned permanently to IPFS.\n\nFoundation artists should check this before April 2027.\nsavemyart.xyz';
   window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(t),'_blank','noopener');
 }
 function shareComplete(n){
-  const t='Just rescued all '+n+' of my Foundation NFTs.\n\nImages and metadata pinned permanently. Art is safe.\n\nThis free tool does it in minutes — no ETH, no gas, nothing.\n\nEvery Foundation artist needs to do this.\nsavemyart.xyz';
+  const t='Just backed up '+n+' artwork file'+(n!==1?'s':'')+' with Save My Art.\n\nMetadata and media pinned to IPFS. No gas, no signing, no cost.\n\nFoundation artists should check their work before April 2027.\nsavemyart.xyz';
   window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(t),'_blank','noopener');
 }
 
@@ -1376,6 +1531,7 @@ function doClearSaved(){
   toast('Saved session data cleared.');
 }
 
+function resetScanUI(){document.getElementById('results-area').innerHTML='';document.getElementById('wallet-addr').focus();}
 function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function openVideoModal(i){
   const card=getCard(i);
@@ -1397,6 +1553,7 @@ function toast(msg){
   const t=document.createElement('div');t.className='toast';t.innerHTML='<div class="tdot"></div><span>'+msg+'</span>';document.body.appendChild(t);
   setTimeout(()=>{t.style.transition='opacity .3s';t.style.opacity='0';},2800);setTimeout(()=>t.remove(),3200);}
 
+
 /* BACK TO TOP */
 window.addEventListener('scroll',()=>{
   const btn=document.getElementById('btt-btn');
@@ -1405,9 +1562,13 @@ window.addEventListener('scroll',()=>{
 
 /* FINISH SESSION WARNING */
 window.addEventListener('beforeunload',(e)=>{
-  if(pinnedCount>0&&pinnedCount<pinnableCount){
-    e.preventDefault();
-    e.returnValue='';
+  if(pinnedCount>0){
+    const remainingVisible=currentNfts.filter((n,i)=>{
+      const idx=n._idx!==undefined?n._idx:i;
+      const hasCid=!!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media));
+      return hasCid&&!pinned.has(idx)&&isVisibleByCurrentFilters(n,i);
+    }).length;
+    if(remainingVisible>0){e.preventDefault();e.returnValue='';}
   }
 });
 </script>
