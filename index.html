@@ -724,26 +724,7 @@ function isPrimaryArtwork(n){
   if(!hasCidFn(n))return false;
   if(looksSpam(n))return false;
   if(looksBulk(n))return false;
-
-  const wallet=(currentWallet||'').toLowerCase();
-  const deployer=(n.contractDeployer||'').toLowerCase();
-  const contract=(n.contract||'').toLowerCase();
-  const chain=(n.chain||'eth').toLowerCase();
-
-  // For Base: contractDeployer not reliably returned by Alchemy — skip check, show all
-  if(chain==='base')return true;
-
-  // For ETH: use deployer as the signal
-  if(deployer&&wallet&&deployer===wallet)return true;
-
-  // Known Foundation shared/factory contracts
-  if(FOUNDATION_SHARED.has(contract))return true;
-
-  // ETH + no deployer info — can't verify, send to secondary
-  if(!deployer)return false;
-
-  // ETH + deployer is someone else = collected
-  return false;
+  return true;
 }
 function classifyNfts(nfts){
   const primary=[];
@@ -852,7 +833,7 @@ function showResults(nfts){
   pinned.clear();
   selectedCards.clear();
 
-  const statusOrder={held:0,listed:1,unknown:2,sold:3};
+  const statusOrder={listed:0,held:1,unknown:2,sold:3};
   const rank=s=>statusOrder[s]??2;
 
   // Classify using v2 classifiers
