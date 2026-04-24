@@ -689,26 +689,40 @@ let currentPinBatchDone=0;  // tracks completion within active batch
 let selectedCards=new Set();
 let currentWallet='';
 let activeChain='all';
-let STRICT_MODE=true; // default: show only primary artwork
-
-/* HEURISTICS */
-function isLikelyFoundation(nft){
-  const title=nft.title||'';
-  if(/#[0-9]{3,}/.test(title))return false;
-  if(nft.isSpam)return false;
-  if(!(nft.has_cid!==undefined?nft.has_cid:(nft.cid_meta||nft.cid_media)))return false;
+/* CLASSIFICATION — v2 */
+function hasCidFn(n){
+  return !!(n.cid_meta||n.cid_media||n.display_cid);
+}
+function looksBulk(n){
+  const title=n.title||'';
+  return /#[0-9]{3,}/.test(title)||
+    (n.collectionCount&&n.collectionCount>150)||
+    (n.totalSupply&&n.totalSupply>150);
+}
+function looksSpam(n){
+  const title=(n.title||'').toLowerCase();
+  const desc=(n.description||'').toLowerCase();
+  return n.isSpam===true||
+    /claim|airdrop|reward|voucher|bonus|free mint|visit|token/i.test(title)||
+    /claim|airdrop|reward|voucher|bonus|free mint|visit/i.test(desc);
+}
+function isPrimaryArtwork(n){
+  if(!hasCidFn(n))return false;
+  if(looksSpam(n))return false;
+  if(looksBulk(n))return false;
   return true;
 }
-function isBulkCollection(nft){
-  return /#[0-9]{3,}/.test(nft.title||'');
-}
-// PRIMARY: likely an individual artwork by this artist
-function isPrimaryArtwork(nft){
-  if(nft.isSpam)return false;
-  if(isBulkCollection(nft))return false;
-  const hasCid=!!(nft.has_cid!==undefined?nft.has_cid:(nft.cid_meta||nft.cid_media));
-  if(!hasCid)return false;
-  return true;
+function classifyNfts(nfts){
+  const primary=[];
+  const secondary=[];
+  for(const n of nfts){
+    n.isBulk=looksBulk(n);
+    n.isSpam=looksSpam(n);
+    n.isPrimary=isPrimaryArtwork(n);
+    if(n.isPrimary)primary.push(n);
+    else secondary.push(n);
+  }
+  return {primary,secondary};
 }
 
 /* LOCAL STORAGE SESSION */
@@ -808,17 +822,9 @@ function showResults(nfts){
   const statusOrder={held:0,listed:1,unknown:2,sold:3};
   const rank=s=>statusOrder[s]??2;
 
-  // Tag every NFT
-  nfts.forEach(n=>{
-    n.isBulk=isBulkCollection(n);
-    n.isLikelyFnd=isLikelyFoundation(n);
-    n.isPrimary=isPrimaryArtwork(n);
-  });
-
-  // PRIMARY: likely artwork — has CID, not bulk, not spam
-  const primaryNfts=nfts.filter(n=>n.isPrimary&&!n.isSpam).sort((a,b)=>rank(a.status)-rank(b.status));
-  // SECONDARY: everything else — bulk, no-CID, spam, uncertain
-  const secondaryNfts=nfts.filter(n=>!n.isPrimary||n.isSpam);
+  // Classify using v2 classifiers
+  const {primary:primaryNfts,secondary:secondaryNfts}=classifyNfts(nfts);
+  primaryNfts.sort((a,b)=>rank(a.status)-rank(b.status));
 
   // All NFTs in one array, primary first (indices must be stable for pinning)
   currentNfts=[...primaryNfts,...secondaryNfts];
@@ -942,7 +948,6 @@ function showResults(nfts){
   },200);
   setTimeout(()=>document.getElementById('results-area').scrollIntoView({behavior:'smooth',block:'start'}),150);
   setTimeout(()=>showResultsModal(),500);
-  setTimeout(()=>applyStrictMode(),50); // apply strict mode immediately after render
   setTimeout(()=>toast('['+total+' works found, '+Object.keys(groups).length+' collections]'),300);
   // Pre-mark previously saved pins from localStorage
   setTimeout(()=>{
@@ -1089,10 +1094,10 @@ let activeFilter='all';
 
 function isVisibleByCurrentFilters(n,i){
   const chain=(n.chain||'eth').toLowerCase();
-  const hasCid=!!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media));
+  const hasCid=hasCidFn(n);
   const idx=n._idx!==undefined?n._idx:i;
   const isPinned=pinned.has(idx);
-  // Secondary NFTs are hidden by default — not shown in primary grid
+  // Only primary artworks participate in filters and pin all
   if(!n.isPrimary)return false;
   if(activeChain&&activeChain!=='all'&&chain!==activeChain.toLowerCase())return false;
   if(activeFilter==='listed')return n.status==='listed';
@@ -1120,28 +1125,15 @@ function setFilter(f,btn){
   applyFilter();
   document.getElementById('results-area').scrollIntoView({behavior:'smooth',block:'start'});
 }
-function applyStrictMode(){
-  // Update toggle button text
-  const btn=document.getElementById('strict-toggle');
-  if(btn)btn.textContent=STRICT_MODE?'Bulk collections hidden — show all':'Showing all NFTs — hide bulk collections';
-  // Show/hide bulk groups
-  document.querySelectorAll('.coll-group[data-bulk="true"]').forEach(g=>{
-    g.style.display=STRICT_MODE?'none':'';
-  });
-  applyFilter();
-}
-
 function setChainFilter(chain,btn){
   activeChain=chain;
   document.querySelectorAll('.chain-filt').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  // Show/hide groups by chain AND respect strict mode bulk hiding
+  // Show/hide groups by chain only (primary groups never have bulk)
   document.querySelectorAll('.coll-group').forEach(group=>{
     const groupChain=(group.dataset.chain||'eth').toLowerCase();
-    const isBulk=group.dataset.bulk==='true';
-    const showChain=chain==='all'||groupChain===chain.toLowerCase();
-    const showStrict=!(STRICT_MODE&&isBulk);
-    group.style.display=(showChain&&showStrict)?'':'none';
+    const show=chain==='all'||groupChain===chain.toLowerCase();
+    group.style.display=show?'':'none';
   });
   applyFilter();
 }
