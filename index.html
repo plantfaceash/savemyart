@@ -200,6 +200,15 @@ h1 em{font-style:italic;color:var(--gold)}
 .vmodal-title{font-family:var(--mono);font-size:12px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80%}
 .vmodal video{width:100%;display:block;max-height:70vh}
 
+
+/* CHAIN FILTER */
+.chain-filt{font-family:var(--mono);font-size:11px;padding:4px 10px;border-radius:20px;border:.5px solid var(--b1);background:transparent;color:var(--t2);cursor:pointer;transition:all .18s;letter-spacing:.04em}
+.chain-filt.active{background:var(--s2);color:var(--t0);border-color:var(--t2)}
+.chain-filt.eth-btn{color:#6b8cba}
+.chain-filt.base-btn{color:#0052ff}
+.chain-filt.eth-btn.active{border-color:#6b8cba;background:rgba(107,140,186,.12);color:#6b8cba}
+.chain-filt.base-btn.active{border-color:#0052ff;background:rgba(0,82,255,.12);color:#0052ff}
+
 /* BACK TO TOP */
 .btt{position:fixed;bottom:24px;right:20px;z-index:200;font-family:var(--mono);font-size:12px;padding:7px 12px;border-radius:var(--r);border:.5px solid var(--gborder);background:var(--s1);color:#5dba85;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .25s;text-shadow:0 0 8px rgba(93,186,133,.4);box-shadow:0 0 12px rgba(93,186,133,.15)}
 .btt.visible{opacity:1;pointer-events:auto}
@@ -654,6 +663,7 @@ let pinnableCount=0;
 const pinned=new Set();
 let selectedCards=new Set();
 let currentWallet='';
+let activeChain='all';
 
 /* LOCAL STORAGE SESSION */
 function lsKey(wallet){return 'sma_pins_'+wallet.toLowerCase();}
@@ -859,6 +869,10 @@ function showResults(nfts){
       '<button class="filt" data-filter="held" onclick="setFilter(\'held\',this)">Held ('+currentNfts.filter(n=>n.status==='held').length+')</button>'+
       (noCidCount>0?'<button class="filt" data-filter="no-cid" onclick="setFilter(\'no-cid\',this)">No CID ('+noCidCount+')</button>':'')+
       '<button class="filt green" data-filter="saved" id="saved-filt" onclick="setFilter(\'saved\',this)" style="display:none">[◆ saved] (0)</button>'+
+      '<span style="opacity:.3;font-family:var(--mono);font-size:10px;padding:0 6px">|</span>'+
+      '<button class="chain-filt" id="cf-all" onclick="setChainFilter(\'all\',this)">All chains</button>'+
+      '<button class="chain-filt eth-btn" id="cf-eth" onclick="setChainFilter(\'eth\',this)">ETH</button>'+
+      '<button class="chain-filt base-btn" id="cf-base" onclick="setChainFilter(\'base\',this)">BASE</button>'+
       '<span class="filter-count" id="filter-count">'+total+' visible</span>'+
     '</div>'+
     delistBar+
@@ -928,8 +942,10 @@ function nftCard(n,i,total){
   let lastBtn;
   if(n.status==='listed'){
     lastBtn='<button class="nb nb-fnd" onclick="openUrl('+i+',\''+fndUrl+'\')" title="Open on Foundation to delist">Delist on Fnd ↗</button>';
+  } else if(chain==='base'){
+    lastBtn='<button class="nb" onclick="goBasescan('+i+')" style="border-color:rgba(0,82,255,.4);color:#0052ff">Basescan</button>';
   } else {
-    lastBtn='<button class="nb nbeth" onclick="goEtherscan('+i+')">Etherscan</button>';
+    lastBtn='<button class="nb nbeth" onclick="goEtherscan('+i+')" style="border-color:rgba(107,140,186,.4);color:#6b8cba">Etherscan</button>';
   }
   const pinBtn=hasCid
     ?'<button class="nb nbpin pulse-anim" id="pin-'+i+'" onclick="pinFromCard('+i+')">Pin free</button>'
@@ -947,7 +963,8 @@ function nftCard(n,i,total){
     ' data-fndurl="'+encodeURIComponent(fndUrl)+'"'+
     ' data-listed="'+(n.status==='listed'?'1':'0')+'"'+
     ' data-isvideo="'+(isVideo?'1':'0')+'"'+
-    ' data-videourl="'+encodeURIComponent(videoUrl)+'">'+
+    ' data-videourl="'+encodeURIComponent(videoUrl)+'"'+
+    ' data-chain="'+(n.chain||'eth')+'">'+
     '<div class="nftart" id="art-'+i+'">'+
       '<div class="'+grad+'" style="width:100%;height:100%;position:relative">'+shimmer+img+'</div>'+
       '<div class="card-select" id="sel-'+i+'" onclick="toggleSelect('+i+')" title="Select"></div>'+
@@ -970,7 +987,8 @@ function imgLoaded(img){img.closest('.nftart')?.classList.add('nftart-loaded');}
 function pinFromCard(i){const c=getCard(i);pinOne(i,decodeURIComponent(c.dataset.cm||''),decodeURIComponent(c.dataset.cv||''),decodeURIComponent(c.dataset.title||'Untitled'),parseInt(c.dataset.total));}
 function dlFromCard(i){const c=getCard(i);dlMeta(decodeURIComponent(c.dataset.title||'Untitled'),decodeURIComponent(c.dataset.cm||''),decodeURIComponent(c.dataset.cv||''));}
 function copyCIDCard(i){const c=getCard(i);const cid=decodeURIComponent(c.dataset.dc||c.dataset.cm||c.dataset.cv||'');copyCID(cid,decodeURIComponent(c.dataset.title||''));}
-function goEtherscan(i){const c=getCard(i);window.open('https://etherscan.io/token/'+c.dataset.contract+'?a='+c.dataset.tokenid,'_blank','noopener');}
+function goEtherscan(i){const c=getCard(i);if(!c)return;window.open('https://etherscan.io/token/'+c.dataset.contract+'?a='+c.dataset.tokenid,'_blank','noopener');}
+function goBasescan(i){const c=getCard(i);if(!c)return;window.open('https://basescan.org/token/'+c.dataset.contract+'?a='+c.dataset.tokenid,'_blank','noopener');}
 function cidkeeper(){window.open('https://cidkeeper.valipokkann.in','_blank','noopener');}
 function openUrl(i,url){window.open(url,'_blank','noopener');}
 
@@ -1011,6 +1029,13 @@ function setFilter(f,btn){
   applyFilter();
   document.getElementById('results-area').scrollIntoView({behavior:'smooth',block:'start'});
 }
+function setChainFilter(chain,btn){
+  activeChain=chain;
+  document.querySelectorAll('.chain-filt').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  applyFilter();
+}
+
 function applyFilter(){
   let visible=0;
   document.querySelectorAll('.nftcard').forEach(card=>{
@@ -1320,8 +1345,8 @@ function closeVideoModal(){
 function toast(msg){
   document.querySelectorAll('.toast').forEach(t=>t.remove());
   const t=document.createElement('div');t.className='toast';t.innerHTML='<div class="tdot"></div><span>'+msg+'</span>';document.body.appendChild(t);
-  setTimeout(()=>{t.style.transition='opacity .3s';t.style.opacity='0';},2800);setTimeout(()=>t.remove(),3200);
-}
+  setTimeout(()=>{t.style.transition='opacity .3s';t.style.opacity='0';},2800);setTimeout(()=>t.remove(),3200);}
+
 /* BACK TO TOP */
 window.addEventListener('scroll',()=>{
   const btn=document.getElementById('btt-btn');
