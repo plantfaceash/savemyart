@@ -91,10 +91,9 @@ export default async function handler(req, res) {
       } while (pageKey);
     }
 
-    await Promise.all([
-      fetchMints(RPC, 'eth'),
-      fetchMints(RPC_BASE, 'base'),
-    ]);
+    // Run sequentially to avoid timeout on large wallets
+    await fetchMints(RPC, 'eth');
+    await fetchMints(RPC_BASE, 'base');
 
     if (mintedTokens.length === 0) {
       return res.status(200).json({ nfts: [], count: 0 });
