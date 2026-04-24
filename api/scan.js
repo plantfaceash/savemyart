@@ -1,12 +1,10 @@
-// api/scan.js — TOKEN-LEVEL PRECISION
-//
-// The ONLY source of truth: ERC721 transfer events where
-//   from = 0x000...000 (zero address = mint)
-//   to   = wallet
-//
-// From those events we get exact (contract, tokenId) pairs.
-// We ONLY show those pairs. Nothing else. Ever.
-// No collection expansion. No factory checks. No getNFTsForContract.
+// api/scan.js — v1.12
+// Fixes in this version:
+// 1. BigInt tokenId normalisation (prevents precision loss on large token IDs)
+// 2. is_video + media_format detected server-side
+// 3. Spam: reads contract.isSpam from getNFTMetadata response + metadata scoring (no extra API calls)
+//    + lightweight metadata scoring
+// 4. animation_url returned for frontend video detection fallback
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,8 +26,8 @@ export default async function handler(req, res) {
   const KEY = process.env.ALCHEMY_API_KEY;
   if (!KEY) return res.status(500).json({ error: 'Not configured' });
 
-  const RPC     = `https://eth-mainnet.g.alchemy.com/v2/${KEY}`;
-  const NFT     = `https://eth-mainnet.g.alchemy.com/nft/v3/${KEY}`;
+  const RPC      = `https://eth-mainnet.g.alchemy.com/v2/${KEY}`;
+  const NFT      = `https://eth-mainnet.g.alchemy.com/nft/v3/${KEY}`;
   const RPC_BASE = `https://base-mainnet.g.alchemy.com/v2/${KEY}`;
   const NFT_BASE = `https://base-mainnet.g.alchemy.com/nft/v3/${KEY}`;
 
@@ -51,23 +49,36 @@ export default async function handler(req, res) {
 
   const addrLC = resolvedAddress.toLowerCase();
 
-  const MARKETPLACE = new Set([
-    '0xcda72070e455bb31c7690a170224ce43623d0b6f',
-    '0x0e3a2a1f2146d86a604adc220b4967a898d7fe07',
-  ]);
+  const MARKETPLACES = {
+    eth: new Set([
+      '0xcda72070e455bb31c7690a170224ce43623d0b6f',
+      '0x0e3a2a1f2146d86a604adc220b4967a898d7fe07',
+    ]),
+    base: new Set([
+      '0x7b503e206db34148ad77e00afe214034edf9e3ff', // Foundation: NFT Market (Proxy) on Base
+    ]),
+  };
 
   const OWNER_OF = '0x6352211e';
 
+  // FIX 1: BigInt token ID normalisation — prevents precision loss on large token IDs
+  function normaliseTokenId(rawId) {
+    if (!rawId) return null;
+    try {
+      return BigInt(rawId).toString();
+    } catch {
+      return null;
+    }
+  }
+
   try {
-    // Get exact minted (contract, tokenId) pairs — from=0x0 means minted to wallet
-    // Run Ethereum and Base in parallel
+    // ── STAGE 1: Get minted (contract, tokenId, chain) pairs ─────────────────
     const mintedTokens = [];
 
     async function fetchMints(rpcUrl, chain) {
       let pageKey = '';
       do {
         const params = {
-          // Eth: Foundation launched ~block 11.5M. Base: launched ~block 1 (Aug 2023 = ~0x0)
           fromBlock: chain === 'base' ? '0x0' : '0xB00000',
           toBlock: 'latest',
           fromAddress: '0x0000000000000000000000000000000000000000',
@@ -83,7 +94,7 @@ export default async function handler(req, res) {
           const contract = tx.rawContract?.address?.toLowerCase();
           if (!contract) continue;
           const rawId = tx.erc721TokenId || tx.tokenId;
-          const tokenId = rawId ? parseInt(rawId, 16).toString() : null;
+          const tokenId = normaliseTokenId(rawId); // FIX 1 applied here
           if (!tokenId) continue;
           mintedTokens.push({ contract, tokenId, chain });
         }
@@ -91,7 +102,7 @@ export default async function handler(req, res) {
       } while (pageKey);
     }
 
-    // Run sequentially to avoid timeout on large wallets
+    // Sequential to avoid timeout on large wallets
     await fetchMints(RPC, 'eth');
     await fetchMints(RPC_BASE, 'base');
 
@@ -99,7 +110,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ nfts: [], count: 0 });
     }
 
-    // Deduplicate — key includes chain so same tokenId on eth+base both show
+    // Deduplicate
     const seen = new Set();
     const uniqueTokens = mintedTokens.filter(({ contract, tokenId, chain }) => {
       const key = `${contract}-${tokenId}-${chain}`;
@@ -108,7 +119,7 @@ export default async function handler(req, res) {
       return true;
     });
 
-    // Fetch metadata for each exact token only
+    // ── STAGE 2: Fetch metadata per exact token ───────────────────────────────
     const results = new Map();
     for (let i = 0; i < uniqueTokens.length; i += 20) {
       await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
@@ -125,13 +136,28 @@ export default async function handler(req, res) {
           results.set(key, {
             title: `Token #${tokenId}`, tokenId, contract,
             chain, cid_meta: null, cid_media: null,
-            has_cid: false, display_cid: null, image: null, status: 'unknown',
+            has_cid: false, display_cid: null, image: null,
+            animation_url: null, media_format: null, is_video: false,
+            status: 'unknown', isSpam: false, spamReasons: [],
           });
         }
       }));
     }
 
-    // Check current owner per token via ownerOf()
+    // ── STAGE 3: Spam detection — no extra API calls, uses metadata + scoring ──
+    // isSpamContract checks removed: too many extra calls, timeout risk on large wallets.
+    // Spam signals come from: Alchemy's spamInfo in getNFTMetadata + metadata scoring.
+    for (const [, nft] of results.entries()) {
+      const metaScore = scoreMetadataSpam(nft);
+      if (!nft.isSpam && metaScore.score >= 40) {
+        nft.isSpam = true;
+        nft.spamReasons = metaScore.reasons;
+      } else if (nft.isSpam) {
+        nft.spamReasons = [...(nft.spamReasons||[]), ...metaScore.reasons];
+      }
+    }
+
+    // ── STAGE 4: Ownership check per token ───────────────────────────────────
     for (let i = 0; i < uniqueTokens.length; i += 20) {
       await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
         const key = `${contract}-${tokenId}-${chain}`;
@@ -147,11 +173,14 @@ export default async function handler(req, res) {
           if (result && result.length >= 66) {
             const owner = ('0x' + result.slice(26)).toLowerCase();
             const ZERO = '0x0000000000000000000000000000000000000000';
-            if (owner === addrLC)            nft.status = 'held';
-            else if (MARKETPLACE.has(owner)) nft.status = 'listed';
-            else if (owner !== ZERO)         nft.status = 'sold';
+            const DEAD = '0x000000000000000000000000000000000000dead';
+            const chainMarket = MARKETPLACES[chain] || new Set();
+            if (owner === addrLC)              nft.status = 'held';
+            else if (chainMarket.has(owner))   nft.status = 'listed';
+            else if (owner === ZERO || owner === DEAD) nft.status = 'burned';
+            else                               nft.status = 'sold';
           }
-        } catch { /* status stays unknown */ }
+        } catch { /* stays unknown */ }
       }));
     }
 
@@ -162,6 +191,46 @@ export default async function handler(req, res) {
     console.error('Scan error:', err.message);
     res.status(500).json({ error: 'Scan failed. Please try again.' });
   }
+}
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+
+// FIX 5: Lightweight metadata spam scoring
+// Known spam token names — instant flag, score 100
+const KNOWN_SPAM_TOKENS = new Set([
+  'jup', 'jup airdrop', 'jup voucher', 'jup token',
+  'arb airdrop', 'op airdrop', 'strk airdrop',
+  'ens airdrop', 'uni airdrop', 'blur airdrop',
+  'zk airdrop', 'eigen airdrop', 'w airdrop',
+  'layerzero airdrop', 'zro airdrop',
+  '$jup', '$arb', '$op',
+]);
+
+function scoreMetadataSpam(nft) {
+  let score = 0;
+  const reasons = [];
+  const title = (nft.title || '').toLowerCase().trim();
+  const desc = (nft.description || '').toLowerCase();
+
+  // Instant flag for known spam token names
+  if (KNOWN_SPAM_TOKENS.has(title)) {
+    score += 100; reasons.push('Known spam token name');
+    return { score, reasons };
+  }
+
+  if (!title || title.length < 2) {
+    score += 15; reasons.push('Missing or weak title');
+  }
+  if (/\b(claim|airdrop|reward|voucher|free|bonus|prize|visit|mint now)\b/i.test(title)) {
+    score += 25; reasons.push('Claim/reward wording in title');
+  }
+  if (/https?:\/\//i.test(desc)) {
+    score += 15; reasons.push('External links in description');
+  }
+  if (!nft.image && !nft.cid_media) {
+    score += 20; reasons.push('No image or media');
+  }
+  return { score, reasons };
 }
 
 const CID_RE = /(?:^|\/)(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})(?=$|[/?#])/i;
@@ -197,22 +266,38 @@ function fmtNFT(nft, contractFallback, tokenIdFallback) {
     || null;
   const hasCid = Boolean(metaCID || mediaCID);
 
-  // Spam detection using Alchemy's spamInfo field
-  const spamInfo = nft.contract?.spamInfo || nft.spamInfo || {};
+  // FIX 4: is_video detected server-side using animation_url + media format hints
+  const animationUrl = nft.rawMetadata?.animation_url || null;
+  const mediaFormat  = nft.media?.[0]?.format
+    || nft.media?.[0]?.mimeType
+    || nft.rawMetadata?.properties?.mime_type
+    || nft.rawMetadata?.properties?.mimeType
+    || nft.rawMetadata?.properties?.type
+    || '';
+  const isVideo = /video/i.test(mediaFormat)
+    || /\.(mp4|mov|webm|ogv|m4v)(\?|#|$)/i.test(animationUrl || '');
+
+  // Spam: read from Alchemy's contract-level spamInfo in metadata response
+  const spamInfo = nft.contract?.spamInfo || {};
   const isSpam = spamInfo.isSpam === true || spamInfo.isSpam === 'true';
 
   return {
     title: nft.name || nft.rawMetadata?.name || `Token #${nft.tokenId || tokenIdFallback}`,
     tokenId: nft.tokenId || tokenIdFallback,
     contract: (nft.contract?.address || contractFallback || '').toLowerCase(),
-    chain: 'eth',
+    chain: 'eth', // overridden after call with actual chain
     cid_meta: metaCID,
     cid_media: mediaCID,
     has_cid: hasCid,
     display_cid: metaCID || mediaCID || null,
     image: nft.image?.cachedUrl || nft.image?.originalUrl || null,
+    animation_url: animationUrl,
+    media_format: mediaFormat || null,
+    is_video: isVideo,
     status: 'unknown',
     isSpam,
+    spamReasons: isSpam ? ['Alchemy metadata flag'] : [],
+    description: nft.rawMetadata?.description || null,
   };
 }
 
