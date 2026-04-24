@@ -691,7 +691,7 @@ function doRescue(){
   if(!v){toast('Paste your wallet address above first');return;}
   // Full state reset
   currentNfts=[];selectedCards.clear();pinned.clear();
-  pinnedCount=0;activeFilter='all';fndOpenedSet.clear();
+  pinnedCount=0;activeFilter='all';activeChain='all';fndOpenedSet.clear();
   currentWallet=v;
   const btn=document.getElementById('rescue-btn');
   btn.disabled=true;btn.textContent='Scanning...';
@@ -883,6 +883,12 @@ function showResults(nfts){
     '<div id="collections-wrap">'+groupsHtml+'</div>'+
     archivedSection;
 
+  // Reset chain filter buttons to 'all'
+  setTimeout(()=>{
+    document.querySelectorAll('.chain-filt').forEach(b=>b.classList.remove('active'));
+    const allBtn=document.getElementById('cf-all');
+    if(allBtn)allBtn.classList.add('active');
+  },200);
   setTimeout(()=>document.getElementById('results-area').scrollIntoView({behavior:'smooth',block:'start'}),150);
   setTimeout(()=>showResultsModal(),500);
   setTimeout(()=>toast('['+total+' works found, '+Object.keys(groups).length+' collections]'),300);
@@ -1048,6 +1054,11 @@ function applyFilter(){
     else if(activeFilter==='needs-pinning')show=hasCid&&!card.classList.contains('rescued');
     else if(activeFilter==='no-cid')show=!hasCid&&!card.classList.contains('rescued');
     else if(activeFilter==='saved')show=card.classList.contains('rescued');
+    // Chain filter on top of status filter
+    if(show&&activeChain&&activeChain!=='all'){
+      const cardChain=(card.dataset.chain||'eth').toLowerCase();
+      show=cardChain===activeChain.toLowerCase();
+    }
     card.classList.toggle('hidden',!show);
     if(show)visible++;
   });
