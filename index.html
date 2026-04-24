@@ -721,26 +721,12 @@ const FOUNDATION_SHARED=new Set([
 ]);
 
 function isPrimaryArtwork(n){
+  // Has IPFS data, not spam, not bulk = primary
+  // We accept that some collected art may show — better than hiding artist's own work
   if(!hasCidFn(n))return false;
   if(looksSpam(n))return false;
   if(looksBulk(n))return false;
-
-  const wallet=(currentWallet||'').toLowerCase();
-  const deployer=(n.contractDeployer||'').toLowerCase();
-  const contract=(n.contract||'').toLowerCase();
-
-  // Strong signal: artist deployed this contract themselves
-  if(deployer&&wallet&&deployer===wallet)return true;
-
-  // Known Foundation shared/factory contracts — treat as primary
-  if(FOUNDATION_SHARED.has(contract))return true;
-
-  // No wallet to compare against — show it (unauthenticated state)
-  if(!wallet)return true;
-
-  // No deployer info AND we have a wallet — send to secondary, can't verify
-  // This is stricter but prevents collected/airdropped work flooding primary
-  return false;
+  return true;
 }
 function classifyNfts(nfts){
   const primary=[];
