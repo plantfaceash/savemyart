@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -689,7 +690,7 @@ let currentPinBatchDone=0;  // tracks completion within active batch
 let selectedCards=new Set();
 let currentWallet='';
 let activeChain='all';
-/* CLASSIFICATION — v2 */
+/* CLASSIFICATION — v3 (deployer-aware, layered) */
 function hasCidFn(n){
   return !!(n.cid_meta||n.cid_media||n.display_cid);
 }
@@ -713,34 +714,80 @@ function looksSpam(n){
   if(/claim|airdrop|reward|voucher|bonus|free mint|visit/i.test(desc))return true;
   return false;
 }
-// Known Foundation shared/factory contracts — artist's work even if deployer isn't them
-const FOUNDATION_SHARED=new Set([
+// Foundation contracts where minting from=0x0 means the wallet IS the artist.
+// Add more known Foundation contracts here over time.
+const FOUNDATION_KNOWN_CONTRACTS=new Set([
   '0x3b3ee1931dc30c1957379fac9aba94d1c48a5405', // Foundation FND shared contract
-  '0x3b612a5b49e025a6e4ba4ee4fb1ef46d13588059', // Foundation factory v1
-  '0x612e2daddc89d91409e40f946f9f7cfe422e777e', // Foundation factory v2
 ]);
 
-function isPrimaryArtwork(n){
-  if(looksSpam(n))return false;
-  if(looksBulk(n))return false;
-  // ETH tokens already passed factory() verification in scan.js — always primary
-  if((n.chain||'eth')==='eth')return hasCidFn(n);
-  // Base: use Foundation domain signal if available, fall back to CID
-  if(n.isFoundation===true)return true;
-  if(hasCidFn(n))return true;
-  return false;
-}
+/**
+ * Classify NFTs into:
+ *  - PRIMARY: artist's own work (likely)
+ *  - SECONDARY: spam, bulk airdrops, no-CID, or collected/airdropped from others
+ *
+ * Layered logic:
+ *   1. Spam → secondary
+ *   2. Bulk pattern (#NNN in title) OR frequency bulk (15+ from same contract that isn't ours/Foundation) → secondary
+ *   3. No CID → secondary (nothing to pin)
+ *   4. Other deployer (populated AND ≠ wallet) AND not a known Foundation contract → secondary
+ *   5. Otherwise → primary
+ *
+ * Positive signals that override the "other deployer" rule:
+ *   - contract === FOUNDATION_KNOWN (e.g. shared) — only artist can mint to themselves there
+ *   - n.isFoundation === true (factory() matched a Foundation factory in scan.js)
+ *   - deployer === wallet (Manifold + old direct-deploy Foundation personal collections)
+ */
 function classifyNfts(nfts){
+  const wallet=(currentWallet||'').toLowerCase();
+  const isHexWallet=/^0x[a-f0-9]{40}$/.test(wallet);
+
+  // Count tokens per contract for frequency-bulk detection
+  const contractCounts={};
+  for(const n of nfts){
+    const c=(n.contract||'').toLowerCase();
+    contractCounts[c]=(contractCounts[c]||0)+1;
+  }
+
   const primary=[];
   const secondary=[];
+
   for(const n of nfts){
     n.isBulk=looksBulk(n);
     n.isSpam=looksSpam(n);
-    n.isPrimary=isPrimaryArtwork(n);
-    if(n.isPrimary)primary.push(n);
+
+    const contract=(n.contract||'').toLowerCase();
+    const deployer=(n.contractDeployer||'').toLowerCase();
+    const isOwnContract=isHexWallet&&deployer&&deployer===wallet;
+    const isOtherDeployer=isHexWallet&&deployer&&deployer!==wallet;
+    const isFoundationContract=FOUNDATION_KNOWN_CONTRACTS.has(contract)||n.isFoundation===true;
+    // Frequency bulk: many tokens from a contract we don't have positive signal for
+    const isFreqBulk=contractCounts[contract]>=15&&!isOwnContract&&!isFoundationContract;
+
+    let isPrimary=true;
+
+    if(n.isSpam){
+      isPrimary=false;
+    } else if(n.isBulk||isFreqBulk){
+      isPrimary=false;
+    } else if(!hasCidFn(n)){
+      isPrimary=false;
+    } else if(isOtherDeployer&&!isFoundationContract){
+      // Definitively someone else's contract — collected/airdrop
+      isPrimary=false;
+    }
+    // else: primary (passed all negative checks)
+
+    n.isPrimary=isPrimary;
+    if(isPrimary)primary.push(n);
     else secondary.push(n);
   }
+
   return {primary,secondary};
+}
+
+/* Kept for backward compat in case something else calls it */
+function isPrimaryArtwork(n){
+  return n.isPrimary===true;
 }
 
 /* LOCAL STORAGE SESSION */
@@ -803,6 +850,8 @@ function doRescue(){
       clearInterval(stepIv);
       STEPS.forEach((_,idx)=>document.getElementById('ss'+idx)?.classList.add('done'));
       btn.disabled=false;btn.textContent='Rescue my art';btn.classList.remove('scanning-anim');
+      // Use resolved address (handles ENS) so contractDeployer comparison works
+      if(data.address)currentWallet=data.address;
       if(data.nfts&&data.nfts.length>0){
         setTimeout(()=>showResults(data.nfts),300);
       } else {
@@ -840,7 +889,7 @@ function showResults(nfts){
   const statusOrder={listed:0,sold:1,held:2,unknown:3};
   const rank=s=>statusOrder[s]??2;
 
-  // Classify using v2 classifiers
+  // Classify using v3 classifier (deployer-aware)
   const {primary:primaryNfts,secondary:secondaryNfts}=classifyNfts(nfts);
   primaryNfts.sort((a,b)=>rank(a.status)-rank(b.status));
 
