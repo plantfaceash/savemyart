@@ -1,4 +1,4 @@
-// api/scan.js — v1.12 
+// api/scan.js — v1.12
 // Fixes in this version:
 // 1. BigInt tokenId normalisation (prevents precision loss on large token IDs)
 // 2. is_video + media_format detected server-side
@@ -252,6 +252,31 @@ function extractCID(uri) {
   return null;
 }
 
+// Foundation gateway domains — if tokenURI comes from these, it's a Foundation NFT
+const FOUNDATION_DOMAINS = [
+  'fnd-collections.mypinata.cloud',
+  'fnd-collections2.mypinata.cloud',
+  'fnd-collections3.mypinata.cloud',
+  'fnd-collections4.mypinata.cloud',
+  'foundation.app',
+  'ipfs.foundation.app',
+  'f8n-production-collection-assets.imgix.net',
+  'f8n-ipfs.mypinata.cloud',
+];
+
+function isFoundationNFT(nft) {
+  const uris = [
+    nft.tokenUri?.raw,
+    nft.tokenUri?.gateway,
+    nft.rawMetadata?.metadata_url,
+    nft.rawMetadata?.image,
+    nft.rawMetadata?.animation_url,
+    nft.image?.originalUrl,
+    nft.image?.cachedUrl,
+  ].filter(Boolean).join(' ');
+  return FOUNDATION_DOMAINS.some(d => uris.includes(d));
+}
+
 function fmtNFT(nft, contractFallback, tokenIdFallback) {
   const metaCID = extractCID(nft.tokenUri?.raw)
     || extractCID(nft.tokenUri?.gateway)
@@ -281,12 +306,15 @@ function fmtNFT(nft, contractFallback, tokenIdFallback) {
   const spamInfo = nft.contract?.spamInfo || {};
   const isSpam = spamInfo.isSpam === true || spamInfo.isSpam === 'true';
 
+  const isFoundation = isFoundationNFT(nft);
+
   return {
     title: nft.name || nft.rawMetadata?.name || `Token #${nft.tokenId || tokenIdFallback}`,
     tokenId: nft.tokenId || tokenIdFallback,
     contract: (nft.contract?.address || contractFallback || '').toLowerCase(),
     contractDeployer: (nft.contract?.contractDeployer || '').toLowerCase(),
     chain: 'eth', // overridden after call with actual chain
+    isFoundation,
     cid_meta: metaCID,
     cid_media: mediaCID,
     has_cid: hasCid,
