@@ -721,10 +721,13 @@ const FOUNDATION_SHARED=new Set([
 ]);
 
 function isPrimaryArtwork(n){
-  if(!hasCidFn(n))return false;
   if(looksSpam(n))return false;
   if(looksBulk(n))return false;
-  return true;
+  // Best signal: scan confirmed this tokenURI comes from Foundation's own gateways
+  if(n.isFoundation===true)return true;
+  // Fallback: has IPFS CID and no negative signals — show it, accept some noise
+  if(hasCidFn(n))return true;
+  return false;
 }
 function classifyNfts(nfts){
   const primary=[];
