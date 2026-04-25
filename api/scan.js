@@ -1,6 +1,8 @@
-// api/scan.js — v2.1
-// Token-level precision + factory() contract verification
-// Only shows NFTs minted to wallet from Foundation contracts
+// api/scan.js — v2.2
+// Scans ETH + Base for NFTs minted to wallet (from=0x0).
+// factory() is a SOFT TAGGER (sets isFoundation=true), NOT a filter.
+// Returns ALL CID-bearing mints + contractDeployer + resolved address.
+// Frontend handles classification (artist's-own vs collected vs spam).
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -55,18 +57,13 @@ export default async function handler(req, res) {
     ]),
   };
 
-  // Foundation shared contract (early mints) — always valid
+  // Foundation shared contract (early mints) — always tagged isFoundation=true
   const SHARED = '0x3b3ee1931dc30c1957379fac9aba94d1c48a5405';
 
-  // Foundation factory contracts — personal collections deployed by these are valid
+  // Foundation factory contracts — contracts deployed by these are Foundation personal collections
   const FOUNDATION_FACTORIES = new Set([
     '0x3b612a5b49e025a6e4ba4ee4fb1ef46d13588059',
     '0x612e2daddc89d91409e40f946f9f7cfe422e777e',
-  ]);
-
-  // Foundation Base contracts
-  const FOUNDATION_BASE_SHARED = new Set([
-    '0x7b503e206db34148ad77e00afe214034edf9e3ff', // Base marketplace (also proxy)
   ]);
 
   const FACTORY_SELECTOR = '0xc45a0155'; // factory()
@@ -78,7 +75,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ── STAGE 1: Get minted tokens ────────────────────────────────────────────
+    // ── STAGE 1: Get minted tokens (from=0x0, to=wallet) ────────────────────
     const mintedTokens = [];
 
     async function fetchMints(rpcUrl, chain) {
@@ -111,10 +108,10 @@ export default async function handler(req, res) {
     await fetchMints(RPC_BASE, 'base');
 
     if (mintedTokens.length === 0) {
-      return res.status(200).json({ nfts: [], count: 0 });
+      return res.status(200).json({ nfts: [], count: 0, address: resolvedAddress });
     }
 
-    // Deduplicate
+    // Deduplicate by contract+tokenId+chain
     const seen = new Set();
     const uniqueTokens = mintedTokens.filter(({ contract, tokenId, chain }) => {
       const key = `${contract}-${tokenId}-${chain}`;
@@ -123,19 +120,17 @@ export default async function handler(req, res) {
       return true;
     });
 
-    // ── STAGE 2: Verify contracts are Foundation ──────────────────────────────
-    // One factory() call per unique ETH contract, cached
+    // ── STAGE 2: Tag ETH contracts as Foundation (SOFT — does not filter) ──
+    // factory() is now a positive signal only. We process all tokens regardless.
     const uniqueEthContracts = [...new Set(
       uniqueTokens.filter(t => t.chain === 'eth').map(t => t.contract)
     )];
 
-    const contractCache = new Map();
-    // Shared contract is always valid
-    contractCache.set(SHARED, true);
+    const isFoundationContract = new Map();
+    isFoundationContract.set(SHARED, true);
 
     await Promise.all(uniqueEthContracts.map(async (contract) => {
-      if (contractCache.has(contract)) return;
-      if (contract === SHARED) { contractCache.set(contract, true); return; }
+      if (isFoundationContract.has(contract)) return;
       try {
         const result = await rpc(RPC, 'eth_call', [
           { to: contract, data: FACTORY_SELECTOR },
@@ -143,30 +138,19 @@ export default async function handler(req, res) {
         ]);
         if (result && result.length >= 66) {
           const factoryAddr = '0x' + result.slice(26).toLowerCase();
-          contractCache.set(contract, FOUNDATION_FACTORIES.has(factoryAddr));
+          isFoundationContract.set(contract, FOUNDATION_FACTORIES.has(factoryAddr));
         } else {
-          contractCache.set(contract, false);
+          isFoundationContract.set(contract, false);
         }
       } catch {
-        contractCache.set(contract, false);
+        isFoundationContract.set(contract, false);
       }
     }));
 
-    // For Base: use tokenURI domain check since factory() isn't reliable cross-chain
-    // Base NFTs pass through — we accept some noise on Base, better than missing art
-    const foundationTokens = uniqueTokens.filter(({ contract, chain }) => {
-      if (chain === 'base') return true; // accept all Base mints, filter client-side
-      return contractCache.get(contract) === true;
-    });
-
-    if (foundationTokens.length === 0) {
-      return res.status(200).json({ nfts: [], count: 0 });
-    }
-
-    // ── STAGE 3: Fetch metadata ───────────────────────────────────────────────
+    // ── STAGE 3: Fetch metadata for ALL tokens (no filtering) ──────────────
     const results = new Map();
-    for (let i = 0; i < foundationTokens.length; i += 20) {
-      await Promise.all(foundationTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
+    for (let i = 0; i < uniqueTokens.length; i += 20) {
+      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
         const key = `${contract}-${tokenId}-${chain}`;
         const nftBase = chain === 'base' ? NFT_BASE : NFT;
         try {
@@ -175,34 +159,38 @@ export default async function handler(req, res) {
           );
           const nft = fmtNFT(data, contract, tokenId);
           nft.chain = chain;
+          // Override: if factory() matched a Foundation factory, force-tag isFoundation
+          if (chain === 'eth' && isFoundationContract.get(contract) === true) {
+            nft.isFoundation = true;
+          }
           results.set(key, nft);
         } catch {
           results.set(key, {
-            title: `Token #${tokenId}`, tokenId, contract,
-            chain, cid_meta: null, cid_media: null,
-            has_cid: false, display_cid: null, image: null,
-            animation_url: null, media_format: null, is_video: false,
-            isFoundation: chain !== 'base' ? true : false,
-            status: 'unknown', isSpam: false, spamReasons: [],
+            title: `Token #${tokenId}`,
+            tokenId,
+            contract,
+            contractDeployer: '',
+            chain,
+            cid_meta: null,
+            cid_media: null,
+            has_cid: false,
+            display_cid: null,
+            image: null,
+            animation_url: null,
+            media_format: null,
+            is_video: false,
+            isFoundation: chain === 'eth' && isFoundationContract.get(contract) === true,
+            status: 'unknown',
+            isSpam: false,
+            description: null,
           });
         }
       }));
     }
 
-    // ── STAGE 3b: Filter by contractDeployer — creator vs collector ─────────
-    // If Alchemy returns contractDeployer and it doesn't match the scanned wallet,
-    // the artist collected this from Foundation primary sale, not created it.
-    // Move these to a secondary flag rather than removing (Base deployer unreliable).
-    for (const [key, nft] of results.entries()) {
-      const deployer = nft.contractDeployer || '';
-      if (deployer && nft.chain === 'eth' && deployer !== addrLC) {
-        nft.isCollected = true; // collected from Foundation, not created
-      }
-    }
-
-    // ── STAGE 4: Ownership check ──────────────────────────────────────────────
-    for (let i = 0; i < foundationTokens.length; i += 20) {
-      await Promise.all(foundationTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
+    // ── STAGE 4: Ownership check (held / listed / sold / burned) ────────────
+    for (let i = 0; i < uniqueTokens.length; i += 20) {
+      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
         const key = `${contract}-${tokenId}-${chain}`;
         const nft = results.get(key);
         if (!nft) return;
@@ -228,7 +216,7 @@ export default async function handler(req, res) {
     }
 
     const nfts = Array.from(results.values());
-    res.status(200).json({ nfts, count: nfts.length });
+    res.status(200).json({ nfts, count: nfts.length, address: resolvedAddress });
 
   } catch (err) {
     console.error('Scan error:', err.message);
@@ -260,30 +248,6 @@ function isFoundationNFT(nft) {
     nft.image?.cachedUrl,
   ].filter(Boolean).join(' ');
   return FOUNDATION_DOMAINS.some(d => uris.includes(d));
-}
-
-const KNOWN_SPAM_TOKENS = new Set([
-  'jup', 'jup airdrop', 'jup voucher', 'jup token',
-  'arb airdrop', 'op airdrop', 'strk airdrop',
-  'ens airdrop', 'uni airdrop', 'blur airdrop',
-  'zk airdrop', 'eigen airdrop', 'w airdrop',
-  'layerzero airdrop', 'zro airdrop', '$jup', '$arb', '$op',
-]);
-
-function scoreMetadataSpam(nft) {
-  let score = 0;
-  const reasons = [];
-  const title = (nft.title || '').toLowerCase().trim();
-  const desc = (nft.description || '').toLowerCase();
-  if (KNOWN_SPAM_TOKENS.has(title)) { return { score: 100, reasons: ['Known spam token'] }; }
-  if (!title || title.length < 2) { score += 15; reasons.push('Missing title'); }
-  if (/\bclaim\b|\bairdrop\b|\breward\b|\bvoucher\b|\bbonus\b|free mint|\bvisit\b|\bdrop\b/i.test(title)) {
-    score += 25; reasons.push('Spam wording in title');
-  }
-  if (/\$[a-z]{2,10}/i.test(title)) { score += 30; reasons.push('Token symbol in title'); }
-  if (/https?:\/\//i.test(desc)) { score += 15; reasons.push('External links in description'); }
-  if (!nft.image && !nft.cid_media) { score += 20; reasons.push('No image or media'); }
-  return { score, reasons };
 }
 
 const CID_RE = /(?:^|\/)(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})(?=$|[/?#])/i;
