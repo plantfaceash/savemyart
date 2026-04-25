@@ -723,9 +723,10 @@ const FOUNDATION_SHARED=new Set([
 function isPrimaryArtwork(n){
   if(looksSpam(n))return false;
   if(looksBulk(n))return false;
-  // Best signal: scan confirmed this tokenURI comes from Foundation's own gateways
+  // ETH tokens already passed factory() verification in scan.js — always primary
+  if((n.chain||'eth')==='eth')return hasCidFn(n);
+  // Base: use Foundation domain signal if available, fall back to CID
   if(n.isFoundation===true)return true;
-  // Fallback: has IPFS CID and no negative signals — show it, accept some noise
   if(hasCidFn(n))return true;
   return false;
 }
