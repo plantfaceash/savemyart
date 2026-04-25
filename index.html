@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -886,28 +885,32 @@ function showResults(nfts){
   pinned.clear();
   selectedCards.clear();
 
-  const statusOrder={listed:0,sold:1,held:2,unknown:3};
-  const rank=s=>statusOrder[s]??2;
+  const statusOrder={listed:0,sold:1,unknown:2,burned:3};
+  const rank=s=>statusOrder[s]??1;
 
   // Classify using v3 classifier (deployer-aware)
   const {primary:primaryNfts,secondary:secondaryNfts}=classifyNfts(nfts);
-  primaryNfts.sort((a,b)=>rank(a.status)-rank(b.status));
 
-  // All NFTs in one array, primary first (indices must be stable for pinning)
-  currentNfts=[...primaryNfts,...secondaryNfts];
+  // Listed + Sold go to the top. Held = likely collected, collapsed at bottom.
+  const topNfts=primaryNfts.filter(n=>n.status!=='held');
+  const heldNfts=primaryNfts.filter(n=>n.status==='held');
+  topNfts.sort((a,b)=>rank(a.status)-rank(b.status));
+
+  // All NFTs in one array (indices must be stable for pinning)
+  currentNfts=[...topNfts,...heldNfts,...secondaryNfts];
   currentNfts.forEach((n,i)=>n._idx=i);
 
   const total=currentNfts.length;
   const primaryCount=primaryNfts.length;
   const secondaryCount=secondaryNfts.length;
-  const listedCount=primaryNfts.filter(n=>n.status==='listed').length;
-  pinnableCount=primaryCount; // completion uses primary only
-  const soldCount=primaryNfts.filter(n=>n.status==='sold').length;
-  const heldCount=primaryNfts.filter(n=>n.status==='held').length;
+  const listedCount=topNfts.filter(n=>n.status==='listed').length;
+  pinnableCount=primaryCount;
+  const soldCount=topNfts.filter(n=>n.status==='sold').length;
+  const heldCount=heldNfts.length;
 
-  // Groups from PRIMARY nfts only — the main result folders
+  // Groups from TOP nfts (listed + sold) only — the main visible area
   const groups={};
-  primaryNfts.forEach((n)=>{
+  topNfts.forEach((n)=>{
     const key=(n.chain||'eth')+':'+(n.contract||'shared');
     if(!groups[key]){
       groups[key]={name:n.title.replace(/ ?#\d+$/,'').trim()||'Collection',tokens:[],chain:n.chain||'eth',contract:n.contract||'shared'};
@@ -948,6 +951,18 @@ function showResults(nfts){
 
   const groupsHtml=soloHtml+foldersHtml;
 
+  // HELD section — collapsed, lazy-rendered (likely collected pieces)
+  const heldSection=heldCount>0
+    ?'<div class="archived-section collapsed" id="held-nfts-sec" style="margin-top:1.5rem">'+
+        '<div class="archived-header" onclick="toggleHeldSection()">'+
+          '<span class="archived-title">['+heldCount+' held piece'+(heldCount!==1?'s':'')+']</span>'+
+          '<span style="font-family:var(--mono);font-size:11px;color:var(--t2);margin-left:8px">may include collected works</span>'+
+          '<span class="archived-toggle" style="margin-left:auto">▾</span>'+
+        '</div>'+
+        '<div class="archived-body" id="held-nfts-body"></div>'+
+      '</div>'
+    :'';
+
   // ONE collapsed section for ALL secondary NFTs — not dozens of folders
   const archivedSection=secondaryCount>0
     ?'<div class="archived-section collapsed" id="other-nfts-sec">'+
@@ -985,7 +1000,7 @@ function showResults(nfts){
       '</div>'+
       '<div class="resfound">'+
         '<h2>Found <em>'+primaryCount+' likely artwork'+(primaryCount!==1?'s':'')+'</em> to rescue</h2>'+
-        '<p>'+Object.keys(groups).length+' collection'+(Object.keys(groups).length!==1?'s':'')+' · '+primaryCount+' pinnable · '+listedCount+' listed'+(secondaryCount>0?' · '+secondaryCount+' other NFTs hidden':'')+' </p>'+
+        '<p>'+Object.keys(groups).length+' collection'+(Object.keys(groups).length!==1?'s':'')+' · '+listedCount+' listed · '+soldCount+' sold'+(heldCount>0?' · '+heldCount+' held (collapsed)':'')+' </p>'+
       '</div>'+
       '<div class="resacts">'+
         '<button class="rb rbg" id="pin-all-btn" onclick="pinAll()">Pin all free</button>'+
@@ -1017,6 +1032,7 @@ function showResults(nfts){
       '<div class="pp-bar"><div class="pp-fill" id="pp-fill"></div></div>'+
     '</div>'+
     '<div id="collections-wrap">'+groupsHtml+'</div>'+
+    heldSection+
     archivedSection+
 '';
   // spam is now part of secondarySection above
@@ -1268,6 +1284,20 @@ function toggleGroup(gid){
       grid.innerHTML=groupNfts.map(n=>nftCard(n,n._idx,currentNfts.length)).join('');
       g.dataset.lazy='false';
     }
+  }
+}
+
+function toggleHeldSection(){
+  const sec=document.getElementById("held-nfts-sec");
+  if(!sec)return;
+  sec.classList.toggle("collapsed");
+  const body=document.getElementById("held-nfts-body");
+  if(body&&!body.dataset.rendered&&!sec.classList.contains("collapsed")){
+    const heldNfts=currentNfts.filter(n=>n.status==="held"&&n.isPrimary);
+    body.innerHTML=
+      '<p class="archived-note" style="font-size:12px;color:var(--t2);margin-bottom:1rem">Pieces minted to your wallet that are currently held. Many may be collected works. You can still pin them free for a backup.</p>'+
+      '<div class="nftgrid">'+heldNfts.map(n=>nftCard(n,n._idx,currentNfts.length)).join("")+'</div>';
+    body.dataset.rendered="true";
   }
 }
 
