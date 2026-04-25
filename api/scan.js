@@ -1,4 +1,4 @@
-// api/scan.js — v2.1
+// api/scan.js — v2.1 
 // Token-level precision + factory() contract verification
 // Only shows NFTs minted to wallet from Foundation contracts
 
@@ -137,16 +137,26 @@ export default async function handler(req, res) {
       if (contractCache.has(contract)) return;
       if (contract === SHARED) { contractCache.set(contract, true); return; }
       try {
-        const result = await rpc(RPC, 'eth_call', [
+        // Check 1: is this a Foundation contract via factory()?
+        const factoryResult = await rpc(RPC, 'eth_call', [
           { to: contract, data: FACTORY_SELECTOR },
           'latest',
         ]);
-        if (result && result.length >= 66) {
-          const factoryAddr = '0x' + result.slice(26).toLowerCase();
-          contractCache.set(contract, FOUNDATION_FACTORIES.has(factoryAddr));
-        } else {
-          contractCache.set(contract, false);
+        let isFoundationContract = false;
+        if (factoryResult && factoryResult.length >= 66) {
+          const factoryAddr = '0x' + factoryResult.slice(26).toLowerCase();
+          isFoundationContract = FOUNDATION_FACTORIES.has(factoryAddr);
         }
+        if (!isFoundationContract) { contractCache.set(contract, false); return; }
+
+        // Check 2: did THIS wallet deploy the contract? (artist vs collector)
+        const meta = await fetchJSON(
+          `${NFT}/getContractMetadata?contractAddress=${contract}`
+        );
+        const deployer = (meta?.contract?.contractDeployer || '').toLowerCase();
+        // If deployer matches wallet = artist's own contract
+        // If no deployer info = can't tell, include it (better to show than hide)
+        contractCache.set(contract, !deployer || deployer === addrLC);
       } catch {
         contractCache.set(contract, false);
       }
@@ -187,6 +197,17 @@ export default async function handler(req, res) {
           });
         }
       }));
+    }
+
+    // ── STAGE 3b: Filter by contractDeployer — creator vs collector ─────────
+    // If Alchemy returns contractDeployer and it doesn't match the scanned wallet,
+    // the artist collected this from Foundation primary sale, not created it.
+    // Move these to a secondary flag rather than removing (Base deployer unreliable).
+    for (const [key, nft] of results.entries()) {
+      const deployer = nft.contractDeployer || '';
+      if (deployer && nft.chain === 'eth' && deployer !== addrLC) {
+        nft.isCollected = true; // collected from Foundation, not created
+      }
     }
 
     // ── STAGE 4: Ownership check ──────────────────────────────────────────────
@@ -325,6 +346,7 @@ function fmtNFT(nft, contractFallback, tokenIdFallback) {
     title: nft.name || nft.rawMetadata?.name || `Token #${nft.tokenId || tokenIdFallback}`,
     tokenId: nft.tokenId || tokenIdFallback,
     contract: (nft.contract?.address || contractFallback || '').toLowerCase(),
+    contractDeployer: (nft.contract?.contractDeployer || '').toLowerCase(),
     chain: 'eth',
     cid_meta: metaCID,
     cid_media: mediaCID,
