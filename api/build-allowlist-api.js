@@ -1,7 +1,6 @@
-// api/build-allowlist.js — ONE TIME USE ENDPOINT
-// Call once at: https://savemyart.xyz/api/build-allowlist
-// Returns all Foundation personal collection contract addresses
-// DELETE THIS FILE after you have the list
+// api/build-allowlist.js — paginated allowlist builder
+// Call with ?page=0, ?page=1, ?page=2, ?page=3 etc until done=true
+// Paste ALL results back to Claude who will combine them
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -22,21 +21,32 @@ export default async function handler(req, res) {
     '0x3fae07dc12cbcda9b511751519c44c4a152a6027e77d9d68d1d2dcae86bf3460',
   ]];
 
-  // Foundation personal collections: blocks 14,100,000 to 22,500,000
-  const START = 0xD72620;
-  const END   = 0x1578000;
-  const CHUNK = 500000; // Large chunks ok with specific address filter
+  // Split block range into pages of ~500k blocks each
+  // Foundation launched personal collections ~block 13,400,000 (0xCC8C60)
+  // Current block ~22,000,000 (0x14FB180)
+  const PAGE_SIZE = 500000;
+  const START = 0xCC8C60;
+  const END   = 0x14FB180;
+
+  const page = parseInt(req.query.page || '0');
+  const fromBlock = START + page * PAGE_SIZE;
+  const toBlock   = Math.min(fromBlock + PAGE_SIZE, END);
+  const done      = toBlock >= END;
+
+  if (fromBlock >= END) {
+    return res.status(200).json({ done: true, page, contracts: [], count: 0 });
+  }
 
   const collections = new Set();
   const errors = [];
 
-  async function getLogs(address, fromBlock, toBlock) {
+  async function getLogs(address, fb, tb) {
     const r = await fetch(RPC, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         jsonrpc: '2.0', id: 1, method: 'eth_getLogs',
-        params: [{ fromBlock, toBlock, address, topics: TOPICS }]
+        params: [{ fromBlock: fb, toBlock: tb, address, topics: TOPICS }]
       })
     });
     const d = await r.json();
@@ -44,39 +54,46 @@ export default async function handler(req, res) {
     return d.result || [];
   }
 
+  const fb = '0x' + fromBlock.toString(16);
+  const tb = '0x' + toBlock.toString(16);
+
   for (const factory of FACTORIES) {
-    let block = START;
-    let chunkSize = CHUNK;
-    while (block < END) {
-      const to = Math.min(block + chunkSize, END);
-      const fb = '0x' + block.toString(16);
-      const tb = '0x' + to.toString(16);
+    let chunkFrom = fromBlock;
+    let chunkSize = PAGE_SIZE;
+
+    while (chunkFrom < toBlock) {
+      const chunkTo = Math.min(chunkFrom + chunkSize, toBlock);
+      const cfb = '0x' + chunkFrom.toString(16);
+      const ctb = '0x' + chunkTo.toString(16);
       try {
-        const logs = await getLogs(factory, fb, tb);
+        const logs = await getLogs(factory, cfb, ctb);
         for (const log of logs) {
           if (log.topics[1]) {
             collections.add('0x' + log.topics[1].slice(26).toLowerCase());
           }
         }
-        block = to;
+        chunkFrom = chunkTo;
       } catch (e) {
-        if (chunkSize > 10000) {
+        if (chunkSize > 50000) {
           chunkSize = Math.floor(chunkSize / 2);
         } else {
-          errors.push(`${fb}-${tb}: ${e.message}`);
-          block = to;
+          errors.push(`${cfb}-${ctb}: ${e.message}`);
+          chunkFrom = chunkTo;
         }
       }
     }
   }
 
-  const sorted = [...collections].sort();
+  const contracts = [...collections].sort();
 
   res.status(200).json({
-    count: sorted.length,
+    page,
+    fromBlock: fb,
+    toBlock: tb,
+    done,
+    nextPage: done ? null : page + 1,
+    count: contracts.length,
     errors: errors.length,
-    contracts: sorted,
-    // Ready to paste into scan.js:
-    setCode: `const FOUNDATION_CONTRACTS = new Set([\n${sorted.map(a => `  '${a}',`).join('\n')}\n  '0x3b3ee1931dc30c1957379fac9aba94d1c48a5405', // shared\n]);`
+    contracts,
   });
 }
