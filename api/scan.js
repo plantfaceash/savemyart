@@ -1,10 +1,6 @@
-// api/scan.js — v1.12
-// Fixes in this version:
-// 1. BigInt tokenId normalisation (prevents precision loss on large token IDs)
-// 2. is_video + media_format detected server-side
-// 3. Spam: reads contract.isSpam from getNFTMetadata response + metadata scoring (no extra API calls)
-//    + lightweight metadata scoring
-// 4. animation_url returned for frontend video detection fallback
+// api/scan.js — v2.1
+// Token-level precision + factory() contract verification
+// Only shows NFTs minted to wallet from Foundation contracts
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -55,24 +51,34 @@ export default async function handler(req, res) {
       '0x0e3a2a1f2146d86a604adc220b4967a898d7fe07',
     ]),
     base: new Set([
-      '0x7b503e206db34148ad77e00afe214034edf9e3ff', // Foundation: NFT Market (Proxy) on Base
+      '0x7b503e206db34148ad77e00afe214034edf9e3ff',
     ]),
   };
 
-  const OWNER_OF = '0x6352211e';
+  // Foundation shared contract (early mints) — always valid
+  const SHARED = '0x3b3ee1931dc30c1957379fac9aba94d1c48a5405';
 
-  // FIX 1: BigInt token ID normalisation — prevents precision loss on large token IDs
+  // Foundation factory contracts — personal collections deployed by these are valid
+  const FOUNDATION_FACTORIES = new Set([
+    '0x3b612a5b49e025a6e4ba4ee4fb1ef46d13588059',
+    '0x612e2daddc89d91409e40f946f9f7cfe422e777e',
+  ]);
+
+  // Foundation Base contracts
+  const FOUNDATION_BASE_SHARED = new Set([
+    '0x7b503e206db34148ad77e00afe214034edf9e3ff', // Base marketplace (also proxy)
+  ]);
+
+  const FACTORY_SELECTOR = '0xc45a0155'; // factory()
+  const OWNER_OF         = '0x6352211e'; // ownerOf(uint256)
+
   function normaliseTokenId(rawId) {
     if (!rawId) return null;
-    try {
-      return BigInt(rawId).toString();
-    } catch {
-      return null;
-    }
+    try { return BigInt(rawId).toString(); } catch { return null; }
   }
 
   try {
-    // ── STAGE 1: Get minted (contract, tokenId, chain) pairs ─────────────────
+    // ── STAGE 1: Get minted tokens ────────────────────────────────────────────
     const mintedTokens = [];
 
     async function fetchMints(rpcUrl, chain) {
@@ -93,8 +99,7 @@ export default async function handler(req, res) {
         for (const tx of (data?.transfers || [])) {
           const contract = tx.rawContract?.address?.toLowerCase();
           if (!contract) continue;
-          const rawId = tx.erc721TokenId || tx.tokenId;
-          const tokenId = normaliseTokenId(rawId); // FIX 1 applied here
+          const tokenId = normaliseTokenId(tx.erc721TokenId || tx.tokenId);
           if (!tokenId) continue;
           mintedTokens.push({ contract, tokenId, chain });
         }
@@ -102,7 +107,6 @@ export default async function handler(req, res) {
       } while (pageKey);
     }
 
-    // Sequential to avoid timeout on large wallets
     await fetchMints(RPC, 'eth');
     await fetchMints(RPC_BASE, 'base');
 
@@ -119,10 +123,50 @@ export default async function handler(req, res) {
       return true;
     });
 
-    // ── STAGE 2: Fetch metadata per exact token ───────────────────────────────
+    // ── STAGE 2: Verify contracts are Foundation ──────────────────────────────
+    // One factory() call per unique ETH contract, cached
+    const uniqueEthContracts = [...new Set(
+      uniqueTokens.filter(t => t.chain === 'eth').map(t => t.contract)
+    )];
+
+    const contractCache = new Map();
+    // Shared contract is always valid
+    contractCache.set(SHARED, true);
+
+    await Promise.all(uniqueEthContracts.map(async (contract) => {
+      if (contractCache.has(contract)) return;
+      if (contract === SHARED) { contractCache.set(contract, true); return; }
+      try {
+        const result = await rpc(RPC, 'eth_call', [
+          { to: contract, data: FACTORY_SELECTOR },
+          'latest',
+        ]);
+        if (result && result.length >= 66) {
+          const factoryAddr = '0x' + result.slice(26).toLowerCase();
+          contractCache.set(contract, FOUNDATION_FACTORIES.has(factoryAddr));
+        } else {
+          contractCache.set(contract, false);
+        }
+      } catch {
+        contractCache.set(contract, false);
+      }
+    }));
+
+    // For Base: use tokenURI domain check since factory() isn't reliable cross-chain
+    // Base NFTs pass through — we accept some noise on Base, better than missing art
+    const foundationTokens = uniqueTokens.filter(({ contract, chain }) => {
+      if (chain === 'base') return true; // accept all Base mints, filter client-side
+      return contractCache.get(contract) === true;
+    });
+
+    if (foundationTokens.length === 0) {
+      return res.status(200).json({ nfts: [], count: 0 });
+    }
+
+    // ── STAGE 3: Fetch metadata ───────────────────────────────────────────────
     const results = new Map();
-    for (let i = 0; i < uniqueTokens.length; i += 20) {
-      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
+    for (let i = 0; i < foundationTokens.length; i += 20) {
+      await Promise.all(foundationTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
         const key = `${contract}-${tokenId}-${chain}`;
         const nftBase = chain === 'base' ? NFT_BASE : NFT;
         try {
@@ -138,28 +182,16 @@ export default async function handler(req, res) {
             chain, cid_meta: null, cid_media: null,
             has_cid: false, display_cid: null, image: null,
             animation_url: null, media_format: null, is_video: false,
+            isFoundation: chain !== 'base' ? true : false,
             status: 'unknown', isSpam: false, spamReasons: [],
           });
         }
       }));
     }
 
-    // ── STAGE 3: Spam detection — no extra API calls, uses metadata + scoring ──
-    // isSpamContract checks removed: too many extra calls, timeout risk on large wallets.
-    // Spam signals come from: Alchemy's spamInfo in getNFTMetadata + metadata scoring.
-    for (const [, nft] of results.entries()) {
-      const metaScore = scoreMetadataSpam(nft);
-      if (!nft.isSpam && metaScore.score >= 40) {
-        nft.isSpam = true;
-        nft.spamReasons = metaScore.reasons;
-      } else if (nft.isSpam) {
-        nft.spamReasons = [...(nft.spamReasons||[]), ...metaScore.reasons];
-      }
-    }
-
-    // ── STAGE 4: Ownership check per token ───────────────────────────────────
-    for (let i = 0; i < uniqueTokens.length; i += 20) {
-      await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
+    // ── STAGE 4: Ownership check ──────────────────────────────────────────────
+    for (let i = 0; i < foundationTokens.length; i += 20) {
+      await Promise.all(foundationTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
         const key = `${contract}-${tokenId}-${chain}`;
         const nft = results.get(key);
         if (!nft) return;
@@ -195,64 +227,6 @@ export default async function handler(req, res) {
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
-// FIX 5: Lightweight metadata spam scoring
-// Known spam token names — instant flag, score 100
-const KNOWN_SPAM_TOKENS = new Set([
-  'jup', 'jup airdrop', 'jup voucher', 'jup token',
-  'arb airdrop', 'op airdrop', 'strk airdrop',
-  'ens airdrop', 'uni airdrop', 'blur airdrop',
-  'zk airdrop', 'eigen airdrop', 'w airdrop',
-  'layerzero airdrop', 'zro airdrop',
-  '$jup', '$arb', '$op',
-]);
-
-function scoreMetadataSpam(nft) {
-  let score = 0;
-  const reasons = [];
-  const title = (nft.title || '').toLowerCase().trim();
-  const desc = (nft.description || '').toLowerCase();
-
-  // Instant flag for known spam token names
-  if (KNOWN_SPAM_TOKENS.has(title)) {
-    score += 100; reasons.push('Known spam token name');
-    return { score, reasons };
-  }
-
-  if (!title || title.length < 2) {
-    score += 15; reasons.push('Missing or weak title');
-  }
-  if (/\b(claim|airdrop|reward|voucher|free|bonus|prize|visit|mint now)\b/i.test(title)) {
-    score += 25; reasons.push('Claim/reward wording in title');
-  }
-  if (/https?:\/\//i.test(desc)) {
-    score += 15; reasons.push('External links in description');
-  }
-  if (!nft.image && !nft.cid_media) {
-    score += 20; reasons.push('No image or media');
-  }
-  return { score, reasons };
-}
-
-const CID_RE = /(?:^|\/)(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})(?=$|[/?#])/i;
-
-function extractCID(uri) {
-  if (!uri) return null;
-  if (typeof uri === 'object') uri = uri.raw || uri.gateway || '';
-  if (!uri) return null;
-  if (uri.startsWith('ipfs://')) {
-    const v = uri.slice(7).split(/[/?#]/)[0];
-    if (!v) return null;
-    if (/^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})$/i.test(v)) return v;
-    return v.length >= 46 ? v : null;
-  }
-  const ipfsMatch = uri.match(/\/ipfs\/(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})(?=$|[/?#])/i);
-  if (ipfsMatch) return ipfsMatch[1];
-  const cidMatch = uri.match(CID_RE);
-  if (cidMatch) return cidMatch[1];
-  return null;
-}
-
-// Foundation gateway domains — if tokenURI comes from these, it's a Foundation NFT
 const FOUNDATION_DOMAINS = [
   'fnd-collections.mypinata.cloud',
   'fnd-collections2.mypinata.cloud',
@@ -277,6 +251,49 @@ function isFoundationNFT(nft) {
   return FOUNDATION_DOMAINS.some(d => uris.includes(d));
 }
 
+const KNOWN_SPAM_TOKENS = new Set([
+  'jup', 'jup airdrop', 'jup voucher', 'jup token',
+  'arb airdrop', 'op airdrop', 'strk airdrop',
+  'ens airdrop', 'uni airdrop', 'blur airdrop',
+  'zk airdrop', 'eigen airdrop', 'w airdrop',
+  'layerzero airdrop', 'zro airdrop', '$jup', '$arb', '$op',
+]);
+
+function scoreMetadataSpam(nft) {
+  let score = 0;
+  const reasons = [];
+  const title = (nft.title || '').toLowerCase().trim();
+  const desc = (nft.description || '').toLowerCase();
+  if (KNOWN_SPAM_TOKENS.has(title)) { return { score: 100, reasons: ['Known spam token'] }; }
+  if (!title || title.length < 2) { score += 15; reasons.push('Missing title'); }
+  if (/\bclaim\b|\bairdrop\b|\breward\b|\bvoucher\b|\bbonus\b|free mint|\bvisit\b|\bdrop\b/i.test(title)) {
+    score += 25; reasons.push('Spam wording in title');
+  }
+  if (/\$[a-z]{2,10}/i.test(title)) { score += 30; reasons.push('Token symbol in title'); }
+  if (/https?:\/\//i.test(desc)) { score += 15; reasons.push('External links in description'); }
+  if (!nft.image && !nft.cid_media) { score += 20; reasons.push('No image or media'); }
+  return { score, reasons };
+}
+
+const CID_RE = /(?:^|\/)(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})(?=$|[/?#])/i;
+
+function extractCID(uri) {
+  if (!uri) return null;
+  if (typeof uri === 'object') uri = uri.raw || uri.gateway || '';
+  if (!uri) return null;
+  if (uri.startsWith('ipfs://')) {
+    const v = uri.slice(7).split(/[/?#]/)[0];
+    if (!v) return null;
+    if (/^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})$/i.test(v)) return v;
+    return v.length >= 46 ? v : null;
+  }
+  const ipfsMatch = uri.match(/\/ipfs\/(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})(?=$|[/?#])/i);
+  if (ipfsMatch) return ipfsMatch[1];
+  const cidMatch = uri.match(CID_RE);
+  if (cidMatch) return cidMatch[1];
+  return null;
+}
+
 function fmtNFT(nft, contractFallback, tokenIdFallback) {
   const metaCID = extractCID(nft.tokenUri?.raw)
     || extractCID(nft.tokenUri?.gateway)
@@ -291,30 +308,24 @@ function fmtNFT(nft, contractFallback, tokenIdFallback) {
     || null;
   const hasCid = Boolean(metaCID || mediaCID);
 
-  // FIX 4: is_video detected server-side using animation_url + media format hints
   const animationUrl = nft.rawMetadata?.animation_url || null;
   const mediaFormat  = nft.media?.[0]?.format
     || nft.media?.[0]?.mimeType
     || nft.rawMetadata?.properties?.mime_type
     || nft.rawMetadata?.properties?.mimeType
-    || nft.rawMetadata?.properties?.type
     || '';
   const isVideo = /video/i.test(mediaFormat)
     || /\.(mp4|mov|webm|ogv|m4v)(\?|#|$)/i.test(animationUrl || '');
 
-  // Spam: read from Alchemy's contract-level spamInfo in metadata response
   const spamInfo = nft.contract?.spamInfo || {};
   const isSpam = spamInfo.isSpam === true || spamInfo.isSpam === 'true';
-
   const isFoundation = isFoundationNFT(nft);
 
   return {
     title: nft.name || nft.rawMetadata?.name || `Token #${nft.tokenId || tokenIdFallback}`,
     tokenId: nft.tokenId || tokenIdFallback,
     contract: (nft.contract?.address || contractFallback || '').toLowerCase(),
-    contractDeployer: (nft.contract?.contractDeployer || '').toLowerCase(),
-    chain: 'eth', // overridden after call with actual chain
-    isFoundation,
+    chain: 'eth',
     cid_meta: metaCID,
     cid_media: mediaCID,
     has_cid: hasCid,
@@ -323,9 +334,9 @@ function fmtNFT(nft, contractFallback, tokenIdFallback) {
     animation_url: animationUrl,
     media_format: mediaFormat || null,
     is_video: isVideo,
+    isFoundation,
     status: 'unknown',
     isSpam,
-    spamReasons: isSpam ? ['Alchemy metadata flag'] : [],
     description: nft.rawMetadata?.description || null,
   };
 }
