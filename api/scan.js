@@ -1,4 +1,4 @@
-// api/scan.js — v2.1 
+// api/scan.js — v2.1
 // Token-level precision + factory() contract verification
 // Only shows NFTs minted to wallet from Foundation contracts
 
@@ -137,26 +137,16 @@ export default async function handler(req, res) {
       if (contractCache.has(contract)) return;
       if (contract === SHARED) { contractCache.set(contract, true); return; }
       try {
-        // Check 1: is this a Foundation contract via factory()?
-        const factoryResult = await rpc(RPC, 'eth_call', [
+        const result = await rpc(RPC, 'eth_call', [
           { to: contract, data: FACTORY_SELECTOR },
           'latest',
         ]);
-        let isFoundationContract = false;
-        if (factoryResult && factoryResult.length >= 66) {
-          const factoryAddr = '0x' + factoryResult.slice(26).toLowerCase();
-          isFoundationContract = FOUNDATION_FACTORIES.has(factoryAddr);
+        if (result && result.length >= 66) {
+          const factoryAddr = '0x' + result.slice(26).toLowerCase();
+          contractCache.set(contract, FOUNDATION_FACTORIES.has(factoryAddr));
+        } else {
+          contractCache.set(contract, false);
         }
-        if (!isFoundationContract) { contractCache.set(contract, false); return; }
-
-        // Check 2: did THIS wallet deploy the contract? (artist vs collector)
-        const meta = await fetchJSON(
-          `${NFT}/getContractMetadata?contractAddress=${contract}`
-        );
-        const deployer = (meta?.contract?.contractDeployer || '').toLowerCase();
-        // If deployer matches wallet = artist's own contract
-        // If no deployer info = can't tell, include it (better to show than hide)
-        contractCache.set(contract, !deployer || deployer === addrLC);
       } catch {
         contractCache.set(contract, false);
       }
