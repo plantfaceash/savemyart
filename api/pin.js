@@ -1,9 +1,7 @@
-// api/pin.js — Robust pinning with smart fallback strategy
-// Strategy (per ChatGPT's correct diagnosis):
-// 1. Try Pinata pinByHash first (fastest, no bandwidth needed)
-// 2. If CID not reachable, fetch from Foundation gateway first, then others
-// 3. Upload fetched content to Pinata
-// 4. Retry with backoff on transient failures
+// api/pin.js — v2.1
+// Fetches IPFS content and uploads to Pinata.
+// Gateways are raced in PARALLEL (not serial) so we get the fastest one.
+// pinByHash is skipped — it's a paid-only Pinata feature and wastes time on free tier.
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -29,17 +27,72 @@ export default async function handler(req, res) {
     .trim()
     .slice(0, 64) || 'untitled';
 
-  // Gateway priority: Foundation first (still up until 2027), then public
+  // Gateways raced in parallel — fastest wins.
+  // cloudflare-ipfs.com removed (shut down 2023).
   const GATEWAYS = [
     'https://ipfs.foundation.app/ipfs/',
-    'https://d2ybmb80bbm9ts.cloudfront.net/',  // Foundation CDN
+    'https://d2ybmb80bbm9ts.cloudfront.net/',
     'https://ipfs.io/ipfs/',
-    'https://cloudflare-ipfs.com/ipfs/',
     'https://gateway.pinata.cloud/ipfs/',
     'https://dweb.link/ipfs/',
   ];
 
-  // Step 1: Try Pinata pinByHash (paid feature but worth trying — may work on some plans)
+  // Race all gateways — return first successful fetch.
+  // Each gateway gets GATEWAY_TIMEOUT ms before being abandoned.
+  const GATEWAY_TIMEOUT = 9000;
+
+  const fetchFromGateways = async (cid) => {
+    const controllers = GATEWAYS.map(() => new AbortController());
+
+    const attempts = GATEWAYS.map((gateway, i) =>
+      fetch(gateway + cid, {
+        signal: controllers[i].signal,
+        headers: { 'Accept': '*/*' },
+      }).then(async (r) => {
+        if (!r.ok) throw new Error(`${gateway} returned ${r.status}`);
+        const contentType = r.headers.get('content-type') || 'application/octet-stream';
+        const buffer = await r.arrayBuffer();
+        if (buffer.byteLength === 0) throw new Error(`${gateway} returned empty body`);
+        // Cancel all other in-flight requests
+        controllers.forEach((c, j) => { if (j !== i) c.abort(); });
+        return { buffer, contentType, gateway };
+      })
+    );
+
+    // Overall race with a hard ceiling slightly under Vercel's function timeout
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => {
+        controllers.forEach(c => c.abort());
+        reject(new Error('All gateways timed out'));
+      }, GATEWAY_TIMEOUT)
+    );
+
+    return Promise.any([...attempts, timeout.then(() => { throw new Error('timeout'); })]);
+  };
+
+  const uploadToPinata = async (buffer, contentType, pinName) => {
+    const formData = new FormData();
+    const ext = contentType.includes('json') ? '.json' : '';
+    formData.append('file', new Blob([buffer], { type: contentType }), pinName + ext);
+    formData.append('pinataMetadata', JSON.stringify({ name: pinName }));
+
+    const r = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${JWT}` },
+      body: formData,
+    });
+
+    if (!r.ok) {
+      const errText = await r.text().catch(() => '');
+      throw new Error(`Pinata upload failed [${r.status}]: ${errText}`);
+    }
+
+    const data = await r.json().catch(() => ({}));
+    return data.IpfsHash;
+  };
+
+  // pinByHash: paid Pinata feature — Pinata fetches the CID themselves, zero bandwidth cost.
+  // Much faster than fetch+upload. Falls back to gateway race if it fails.
   const tryPinByHash = async (cid, pinName) => {
     try {
       const r = await fetch('https://api.pinata.cloud/pinning/pinByHash', {
@@ -52,83 +105,35 @@ export default async function handler(req, res) {
           hashToPin: cid,
           pinataMetadata: { name: pinName },
         }),
+        signal: AbortSignal.timeout(8000),
       });
       if (r.ok) {
         const data = await r.json().catch(() => ({}));
-        return { success: true, method: 'pinByHash', id: data.id };
+        return { success: true, method: 'pinByHash', newCid: cid, id: data.id };
       }
-      return null; // fall through to fetch method
     } catch {
-      return null;
+      // fall through to gateway fetch
     }
-  };
-
-  // Step 2: Fetch from gateway + upload to Pinata
-  const fetchAndPin = async (cid, pinName) => {
-    let lastErr = '';
-
-    for (const gateway of GATEWAYS) {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          if (attempt > 0) await sleep(1500 * attempt);
-
-          const url = gateway + cid;
-          const r = await fetch(url, {
-            signal: AbortSignal.timeout(25000),
-            headers: { 'Accept': '*/*' },
-          });
-
-          if (!r.ok) {
-            lastErr = `${gateway} returned ${r.status}`;
-            continue;
-          }
-
-          const contentType = r.headers.get('content-type') || 'application/octet-stream';
-          const buffer = await r.arrayBuffer();
-
-          if (buffer.byteLength === 0) {
-            lastErr = `${gateway} returned empty body`;
-            continue;
-          }
-
-          // Upload to Pinata
-          const formData = new FormData();
-          const ext = contentType.includes('json') ? '.json' : '';
-          formData.append('file', new Blob([buffer], { type: contentType }), pinName + ext);
-          formData.append('pinataMetadata', JSON.stringify({ name: pinName }));
-
-          const uploadRes = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${JWT}` },
-            body: formData,
-          });
-
-          if (uploadRes.ok) {
-            const data = await uploadRes.json().catch(() => ({}));
-            return { success: true, method: 'fetchAndPin', gateway, newCid: data.IpfsHash };
-          }
-
-          const errText = await uploadRes.text().catch(() => '');
-          lastErr = `Pinata upload failed [${uploadRes.status}]: ${errText}`;
-
-        } catch (err) {
-          lastErr = `${gateway} error: ${err.message}`;
-        }
-      }
-    }
-
-    return { success: false, error: `Could not fetch CID from any gateway. ${lastErr}` };
+    return null;
   };
 
   const pinCID = async (cid, pinName) => {
     if (!cid) return { success: true, skipped: true };
 
-    // Try pinByHash first (zero bandwidth if it works)
+    // Try pinByHash first (paid tier — fastest, no bandwidth)
     const hashResult = await tryPinByHash(cid, pinName);
     if (hashResult?.success) return hashResult;
 
-    // Fall back to fetch + upload
-    return fetchAndPin(cid, pinName);
+    // Fall back to parallel gateway race + upload
+    try {
+      const { buffer, contentType, gateway } = await fetchFromGateways(cid);
+      const newCid = await uploadToPinata(buffer, contentType, pinName);
+      return { success: true, method: 'fetchAndPin', gateway, newCid };
+    } catch (err) {
+      const msg = err?.message || 'Unknown error';
+      console.error(`Pin failed for ${cid}:`, msg);
+      return { success: false, error: msg };
+    }
   };
 
   try {
@@ -141,25 +146,24 @@ export default async function handler(req, res) {
 
     if (!success) {
       const errMsg = (!metaResult.success ? metaResult.error : mediaResult.error) || 'Unknown error';
-      const isGatewayError = errMsg.includes('Could not fetch');
+      const isTimeout = errMsg.includes('timed out') || errMsg.includes('timeout');
       console.error('Pin failed:', errMsg);
       return res.status(500).json({
         success: false,
-        error: isGatewayError
-          ? 'IPFS network is busy right now. Please try again in a few minutes.'
-          : errMsg,
+        error: isTimeout
+          ? 'IPFS gateways are slow right now. Please try again in a few minutes.'
+          : 'IPFS network busy. Please try again.',
         meta: metaResult,
         media: mediaResult,
       });
     }
 
-    res.status(200).json({ success: true, meta: metaResult, media: mediaResult });
+    // Return IpfsHash at the top level so the frontend can confirm a real CID
+    const IpfsHash = metaResult.newCid || mediaResult.newCid || null;
+    res.status(200).json({ success: true, IpfsHash, meta: metaResult, media: mediaResult });
+
   } catch (err) {
     console.error('Pin handler error:', err);
     res.status(500).json({ error: err.message });
   }
-}
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
