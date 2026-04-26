@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -904,9 +905,9 @@ function showResults(nfts){
   const primaryCount=primaryNfts.length;
   const secondaryCount=secondaryNfts.length;
   const listedCount=topNfts.filter(n=>n.status==='listed').length;
-  pinnableCount=primaryCount;
-  const soldCount=topNfts.filter(n=>n.status==='sold').length;
   const heldCount=heldNfts.length;
+  pinnableCount=primaryCount+heldCount;
+  const soldCount=topNfts.filter(n=>n.status==='sold').length;
 
   // Groups from TOP nfts (listed + sold) only — the main visible area
   const groups={};
@@ -1429,8 +1430,8 @@ function markPinned(i,title,total,pinnedCid){
   applyFilter();
   // Completion: use batch tracking when active, fall back to global pinnableCount
   if(currentPinBatchTotal>0){
-    if(currentPinBatchDone>=currentPinBatchTotal)setTimeout(()=>showCompletion(currentPinBatchDone),600);
-  } else if(pinnableCount>0&&pinnedCount>=pinnableCount){
+    if(currentPinBatchDone>=currentPinBatchTotal)setTimeout(()=>showCompletion(pinnedCount),600);
+  } else if(pinnedCount>0&&pinnedCount>=pinnableCount){
     setTimeout(()=>showCompletion(pinnedCount),600);
   }
 }
