@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -1778,7 +1777,13 @@ function closeWalletPicker() {
 function disconnectWallet() {
   delistProvider = null; delistSigner = null;
   delistAddr = ''; delistWalletName = ''; activeChainId = null;
-  updateWalletBar();
+  // Restore the original connect button (outerHTML swap means we need to find it by new id)
+  const area = document.getElementById('delist-connect-btn');
+  if (area) {
+    area.outerHTML = '<button class="open-fnd-btn" id="delist-connect-btn" onclick="connectDelistWalletAndCheck()">Connect wallet to delist</button>';
+  }
+  const bar = document.getElementById('wallet-status-bar');
+  if (bar) bar.style.display = 'none';
   toast('Wallet disconnected.');
 }
 
@@ -1806,7 +1811,12 @@ function updateWalletBar() {
     '<button onclick="showWalletPicker()" style="font-family:var(--mono);font-size:10px;padding:2px 8px;border:.5px solid var(--b1);border-radius:4px;background:transparent;color:var(--t2);cursor:pointer">change</button>' +
     '<button onclick="disconnectWallet()" style="font-family:var(--mono);font-size:10px;padding:2px 8px;border:.5px solid var(--b1);border-radius:4px;background:transparent;color:var(--t2);cursor:pointer">disconnect</button>';
 
-  if (cbtn) { cbtn.textContent = '[◆ connected — ' + short + ']'; cbtn.style.color = '#5dba85'; cbtn.style.borderColor = 'var(--gborder)'; }
+  if (cbtn) {
+    // Replace the connect button with connected status + disconnect inline
+    cbtn.outerHTML =
+      '<span id="delist-connect-btn" style="font-family:var(--mono);font-size:11px;color:#5dba85;padding:5px 10px;border:.5px solid var(--gborder);border-radius:var(--r);background:var(--greenbg)">[◆ ' + short + ' · ' + netName + ']</span>' +
+      '<button class="open-fnd-btn" onclick="disconnectWallet()" style="color:#e06060;border-color:rgba(220,60,60,0.35)">Disconnect</button>';
+  }
 }
 
 async function connectDelistWalletAndCheck() {
