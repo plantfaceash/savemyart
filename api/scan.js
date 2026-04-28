@@ -1,8 +1,6 @@
-// api/scan.js — v2.2
-// Scans ETH + Base for NFTs minted to wallet (from=0x0).
-// factory() is a SOFT TAGGER (sets isFoundation=true), NOT a filter.
-// Returns ALL CID-bearing mints + contractDeployer + resolved address.
-// Frontend handles classification (artist's-own vs collected vs spam).
+// api/scan.js — v2.3
+// Scans ETH + Base for ERC-721 NFTs minted to wallet (from=0x0).
+// ERC-721 only — clean, simple, matches last confirmed working state.
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -30,7 +28,6 @@ export default async function handler(req, res) {
   const RPC_BASE = `https://base-mainnet.g.alchemy.com/v2/${KEY}`;
   const NFT_BASE = `https://base-mainnet.g.alchemy.com/nft/v3/${KEY}`;
 
-  // ENS resolution
   let resolvedAddress = input;
   if (isENS) {
     try {
@@ -58,17 +55,15 @@ export default async function handler(req, res) {
     ]),
   };
 
-  // Foundation shared contract (early mints) — always tagged isFoundation=true
   const SHARED = '0x3b3ee1931dc30c1957379fac9aba94d1c48a5405';
-
-  // Foundation factory contracts — contracts deployed by these are Foundation personal collections
   const FOUNDATION_FACTORIES = new Set([
     '0x3b612a5b49e025a6e4ba4ee4fb1ef46d13588059',
     '0x612e2daddc89d91409e40f946f9f7cfe422e777e',
   ]);
-
-  const FACTORY_SELECTOR = '0xc45a0155'; // factory()
-  const OWNER_OF         = '0x6352211e'; // ownerOf(uint256)
+  const FACTORY_SELECTOR = '0xc45a0155';
+  const OWNER_OF         = '0x6352211e';
+  const ZERO             = '0x0000000000000000000000000000000000000000';
+  const DEAD             = '0x000000000000000000000000000000000000dead';
 
   function normaliseTokenId(rawId) {
     if (!rawId) return null;
@@ -76,22 +71,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ── STAGE 1: Get minted tokens (from=0x0, to=wallet) ────────────────────
+    // STAGE 1: Collect ERC-721 mints (from=0x0) for ETH and Base
     const mintedTokens = [];
 
-    // Alchemy does not reliably support fromAddress filter when mixing
-    // erc721 + erc1155 in one call. Split into two separate calls per chain.
-    // ERC-721: filter by fromAddress=0x0 (Alchemy handles this reliably)
-    // ERC-1155: filter by toAddress only, detect mints by checking from===0x0 in code
-
-    const ZERO = '0x0000000000000000000000000000000000000000';
-    const fromBlock = (chain) => chain === 'base' ? '0x0' : '0xB00000';
-
-    async function fetchERC721Mints(rpcUrl, chain) {
+    for (const [rpcUrl, chain] of [[RPC, 'eth'], [RPC_BASE, 'base']]) {
       let pageKey = '';
       do {
         const params = {
-          fromBlock: fromBlock(chain),
+          fromBlock: chain === 'base' ? '0x0' : '0xB00000',
           toBlock: 'latest',
           fromAddress: ZERO,
           toAddress: resolvedAddress,
@@ -101,69 +88,28 @@ export default async function handler(req, res) {
           maxCount: '0x3e8',
         };
         if (pageKey) params.pageKey = pageKey;
-        const data = await rpc(rpcUrl, 'alchemy_getAssetTransfers', [params]);
-        for (const tx of (data?.transfers || [])) {
-          const contract = tx.rawContract?.address?.toLowerCase();
-          if (!contract) continue;
-          const tokenId = normaliseTokenId(tx.erc721TokenId || tx.tokenId);
-          if (!tokenId) continue;
-          mintedTokens.push({ contract, tokenId, chain });
+        try {
+          const data = await rpc(rpcUrl, 'alchemy_getAssetTransfers', [params]);
+          for (const tx of (data?.transfers || [])) {
+            const contract = tx.rawContract?.address?.toLowerCase();
+            if (!contract) continue;
+            const tokenId = normaliseTokenId(tx.erc721TokenId || tx.tokenId);
+            if (!tokenId) continue;
+            mintedTokens.push({ contract, tokenId, chain });
+          }
+          pageKey = data?.pageKey || '';
+        } catch (err) {
+          console.error(`Alchemy fetch failed [${chain}]:`, err.message);
+          pageKey = '';
         }
-        pageKey = data?.pageKey || '';
       } while (pageKey);
     }
-
-    async function fetchERC1155Mints(rpcUrl, chain) {
-      let pageKey = '';
-      do {
-        const params = {
-          fromBlock: fromBlock(chain),
-          toBlock: 'latest',
-          toAddress: resolvedAddress,
-          category: ['erc1155'],
-          withMetadata: false,
-          excludeZeroValue: false,
-          maxCount: '0x3e8',
-        };
-        if (pageKey) params.pageKey = pageKey;
-        const data = await rpc(rpcUrl, 'alchemy_getAssetTransfers', [params]);
-        for (const tx of (data?.transfers || [])) {
-          // Only include mints (from === zero address)
-          if ((tx.from || '').toLowerCase() !== ZERO) continue;
-          const contract = tx.rawContract?.address?.toLowerCase();
-          if (!contract) continue;
-          const tokenId = normaliseTokenId(
-            tx.erc1155Metadata?.[0]?.tokenId || tx.tokenId
-          );
-          if (!tokenId) continue;
-          mintedTokens.push({ contract, tokenId, chain });
-        }
-        pageKey = data?.pageKey || '';
-      } while (pageKey);
-    }
-
-    async function fetchMints(rpcUrl, chain) {
-      // Each call is isolated — if ERC-1155 fails, ERC-721 results are preserved
-      try {
-        await fetchERC721Mints(rpcUrl, chain);
-      } catch (err) {
-        console.error(`ERC-721 scan failed for ${chain}:`, err.message);
-      }
-      try {
-        await fetchERC1155Mints(rpcUrl, chain);
-      } catch (err) {
-        console.error(`ERC-1155 scan failed for ${chain}:`, err.message);
-      }
-    }
-
-    await fetchMints(RPC, 'eth');
-    await fetchMints(RPC_BASE, 'base');
 
     if (mintedTokens.length === 0) {
       return res.status(200).json({ nfts: [], count: 0, address: resolvedAddress });
     }
 
-    // Deduplicate by contract+tokenId+chain
+    // Deduplicate
     const seen = new Set();
     const uniqueTokens = mintedTokens.filter(({ contract, tokenId, chain }) => {
       const key = `${contract}-${tokenId}-${chain}`;
@@ -172,12 +118,10 @@ export default async function handler(req, res) {
       return true;
     });
 
-    // ── STAGE 2: Tag ETH contracts as Foundation (SOFT — does not filter) ──
-    // factory() is now a positive signal only. We process all tokens regardless.
+    // STAGE 2: Foundation factory tagging (soft signal, ETH only)
     const uniqueEthContracts = [...new Set(
       uniqueTokens.filter(t => t.chain === 'eth').map(t => t.contract)
     )];
-
     const isFoundationContract = new Map();
     isFoundationContract.set(SHARED, true);
 
@@ -199,7 +143,7 @@ export default async function handler(req, res) {
       }
     }));
 
-    // ── STAGE 3: Fetch metadata for ALL tokens (no filtering) ──────────────
+    // STAGE 3: Fetch metadata
     const results = new Map();
     for (let i = 0; i < uniqueTokens.length; i += 20) {
       await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
@@ -211,36 +155,24 @@ export default async function handler(req, res) {
           );
           const nft = fmtNFT(data, contract, tokenId);
           nft.chain = chain;
-          // Override: if factory() matched a Foundation factory, force-tag isFoundation
           if (chain === 'eth' && isFoundationContract.get(contract) === true) {
             nft.isFoundation = true;
           }
           results.set(key, nft);
         } catch {
           results.set(key, {
-            title: `Token #${tokenId}`,
-            tokenId,
-            contract,
-            contractDeployer: '',
-            chain,
-            cid_meta: null,
-            cid_media: null,
-            has_cid: false,
-            display_cid: null,
-            image: null,
-            animation_url: null,
-            media_format: null,
-            is_video: false,
+            title: `Token #${tokenId}`, tokenId, contract,
+            contractDeployer: '', chain,
+            cid_meta: null, cid_media: null, has_cid: false, display_cid: null,
+            image: null, animation_url: null, media_format: null, is_video: false,
             isFoundation: chain === 'eth' && isFoundationContract.get(contract) === true,
-            status: 'unknown',
-            isSpam: false,
-            description: null,
+            status: 'unknown', isSpam: false, description: null,
           });
         }
       }));
     }
 
-    // ── STAGE 4: Ownership check (held / listed / sold / burned) ────────────
+    // STAGE 4: Ownership check
     for (let i = 0; i < uniqueTokens.length; i += 20) {
       await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
         const key = `${contract}-${tokenId}-${chain}`;
@@ -255,8 +187,6 @@ export default async function handler(req, res) {
           ]);
           if (result && result.length >= 66) {
             const owner = ('0x' + result.slice(26)).toLowerCase();
-            const ZERO = '0x0000000000000000000000000000000000000000';
-            const DEAD = '0x000000000000000000000000000000000000dead';
             const chainMarket = MARKETPLACES[chain] || new Set();
             if (owner === addrLC)              nft.status = 'held';
             else if (chainMarket.has(owner))   nft.status = 'listed';
@@ -276,28 +206,18 @@ export default async function handler(req, res) {
   }
 }
 
-// ── HELPERS ──────────────────────────────────────────────────────────────────
-
 const FOUNDATION_DOMAINS = [
-  'fnd-collections.mypinata.cloud',
-  'fnd-collections2.mypinata.cloud',
-  'fnd-collections3.mypinata.cloud',
-  'fnd-collections4.mypinata.cloud',
-  'foundation.app',
-  'ipfs.foundation.app',
-  'f8n-production-collection-assets.imgix.net',
-  'f8n-ipfs.mypinata.cloud',
+  'fnd-collections.mypinata.cloud', 'fnd-collections2.mypinata.cloud',
+  'fnd-collections3.mypinata.cloud', 'fnd-collections4.mypinata.cloud',
+  'foundation.app', 'ipfs.foundation.app',
+  'f8n-production-collection-assets.imgix.net', 'f8n-ipfs.mypinata.cloud',
 ];
 
 function isFoundationNFT(nft) {
   const uris = [
-    nft.tokenUri?.raw,
-    nft.tokenUri?.gateway,
-    nft.rawMetadata?.metadata_url,
-    nft.rawMetadata?.image,
-    nft.rawMetadata?.animation_url,
-    nft.image?.originalUrl,
-    nft.image?.cachedUrl,
+    nft.tokenUri?.raw, nft.tokenUri?.gateway, nft.rawMetadata?.metadata_url,
+    nft.rawMetadata?.image, nft.rawMetadata?.animation_url,
+    nft.image?.originalUrl, nft.image?.cachedUrl,
   ].filter(Boolean).join(' ');
   return FOUNDATION_DOMAINS.some(d => uris.includes(d));
 }
@@ -314,57 +234,34 @@ function extractCID(uri) {
     if (/^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})$/i.test(v)) return v;
     return v.length >= 46 ? v : null;
   }
-  const ipfsMatch = uri.match(/\/ipfs\/(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})(?=$|[/?#])/i);
-  if (ipfsMatch) return ipfsMatch[1];
-  const cidMatch = uri.match(CID_RE);
-  if (cidMatch) return cidMatch[1];
+  const m = uri.match(/\/ipfs\/(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})(?=$|[/?#])/i);
+  if (m) return m[1];
+  const c = uri.match(CID_RE);
+  if (c) return c[1];
   return null;
 }
 
 function fmtNFT(nft, contractFallback, tokenIdFallback) {
-  const metaCID = extractCID(nft.tokenUri?.raw)
-    || extractCID(nft.tokenUri?.gateway)
-    || extractCID(nft.rawMetadata?.metadata_url)
-    || null;
-  const mediaCID = extractCID(nft.rawMetadata?.image)
-    || extractCID(nft.rawMetadata?.animation_url)
-    || extractCID(nft.media?.[0]?.uri)
-    || extractCID(nft.media?.[0]?.raw)
-    || extractCID(nft.image?.originalUrl)
-    || extractCID(nft.image?.cachedUrl)
-    || null;
+  const metaCID  = extractCID(nft.tokenUri?.raw) || extractCID(nft.tokenUri?.gateway) || extractCID(nft.rawMetadata?.metadata_url) || null;
+  const mediaCID = extractCID(nft.rawMetadata?.image) || extractCID(nft.rawMetadata?.animation_url) || extractCID(nft.media?.[0]?.uri) || extractCID(nft.media?.[0]?.raw) || extractCID(nft.image?.originalUrl) || extractCID(nft.image?.cachedUrl) || null;
   const hasCid = Boolean(metaCID || mediaCID);
-
   const animationUrl = nft.rawMetadata?.animation_url || null;
-  const mediaFormat  = nft.media?.[0]?.format
-    || nft.media?.[0]?.mimeType
-    || nft.rawMetadata?.properties?.mime_type
-    || nft.rawMetadata?.properties?.mimeType
-    || '';
-  const isVideo = /video/i.test(mediaFormat)
-    || /\.(mp4|mov|webm|ogv|m4v)(\?|#|$)/i.test(animationUrl || '');
-
+  const mediaFormat  = nft.media?.[0]?.format || nft.media?.[0]?.mimeType || nft.rawMetadata?.properties?.mime_type || nft.rawMetadata?.properties?.mimeType || '';
+  const isVideo = /video/i.test(mediaFormat) || /\.(mp4|mov|webm|ogv|m4v)(\?|#|$)/i.test(animationUrl || '');
   const spamInfo = nft.contract?.spamInfo || {};
   const isSpam = spamInfo.isSpam === true || spamInfo.isSpam === 'true';
-  const isFoundation = isFoundationNFT(nft);
-
   return {
     title: nft.name || nft.rawMetadata?.name || `Token #${nft.tokenId || tokenIdFallback}`,
     tokenId: nft.tokenId || tokenIdFallback,
     contract: (nft.contract?.address || contractFallback || '').toLowerCase(),
     contractDeployer: (nft.contract?.contractDeployer || '').toLowerCase(),
     chain: 'eth',
-    cid_meta: metaCID,
-    cid_media: mediaCID,
-    has_cid: hasCid,
+    cid_meta: metaCID, cid_media: mediaCID, has_cid: hasCid,
     display_cid: metaCID || mediaCID || null,
     image: nft.image?.cachedUrl || nft.image?.originalUrl || null,
-    animation_url: animationUrl,
-    media_format: mediaFormat || null,
-    is_video: isVideo,
-    isFoundation,
-    status: 'unknown',
-    isSpam,
+    animation_url: animationUrl, media_format: mediaFormat || null,
+    is_video: isVideo, isFoundation: isFoundationNFT(nft),
+    status: 'unknown', isSpam,
     description: nft.rawMetadata?.description || null,
   };
 }
