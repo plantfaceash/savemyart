@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -440,6 +439,7 @@ body::before{
   user-select:none;
 }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
 </head>
 <body>
 
@@ -617,7 +617,7 @@ body::before{
         <div class="hs"><span class="sn">[01]</span><div class="hst"><h4>Enter your wallet address</h4><p>Paste your public address or connect your wallet. We never ask you to sign anything. No transaction. Nothing spent.</p></div></div>
         <div class="hs"><span class="sn">[02]</span><div class="hst"><h4>We find rescuable NFTs minted to your wallet</h4><p>We scan Ethereum and Base for mint records, then look for IPFS metadata and media CIDs we can back up. This finds everything: held pieces, listed pieces, and sold pieces.</p></div></div>
         <div class="hs"><span class="sn">[03]</span><div class="hst"><h4>Pin your files free</h4><p>Click "Pin all free" and we handle everything server-side via Pinata. Your files get pinned to IPFS via Pinata, independent of Foundation's servers. Free, permanent, no cost to you.</p></div></div>
-        <div class="hs"><span class="sn">[04]</span><div class="hst"><h4>Delist listed pieces if needed</h4><p>If you want to move listed pieces to a new platform, delist them on Foundation first using the Delist button on each card. Foundation is building a bulk tool. Until then, open listings one at a time. Each delist requires a small gas fee.</p></div></div>
+        <div class="hs"><span class="sn">[04]</span><div class="hst"><h4>Delist listed pieces if needed</h4><p>Foundation's UI is offline. Use the Delist button on each listed card to cancel directly via your wallet. Each delist requires a small gas fee.</p></div></div>
         <div class="hs"><span class="sn">[05]</span><div class="hst"><h4>Move forward</h4><p>Art safe. List on Zora or Manifold today. Or wait for canvas, a new platform being built right now with zero fees, forever.</p></div></div>
       </div>
       <div class="sep"></div>
@@ -984,11 +984,16 @@ function showResults(nfts){
 
   const delistBar=listedCount>0
     ?'<div class="delist-bar">'+
-        '<div class="delist-bar-text"><strong>['+listedCount+' piece'+(listedCount!==1?'s':'')+' listed]</strong>: You can pin them now for free. To move them to another platform, delist from Foundation first. Foundation is building a bulk tool. Until then open listings one at a time:</div>'+
+        '<div class="delist-bar-text">'+
+          '<strong>['+listedCount+' piece'+(listedCount!==1?'s':'')+' listed on Foundation]</strong> '+
+          'Foundation\'s UI is offline. Cancel your listings directly from here using your wallet. '+
+          '<span class="gas-note">Delisting requires a standard network gas fee (paid to the network, not this site). '+
+          'You can review the transaction in your wallet before confirming.</span>'+
+        '</div>'+
         '<div class="delist-btns">'+
-          '<button class="open-fnd-btn" onclick="openFoundationBatch(1)">Open 1</button>'+
-          '<button class="open-fnd-btn" onclick="openFoundationBatch(5)">Open 5</button>'+
-          '<button class="open-fnd-btn" onclick="openFoundationBatch(10)">Open 10</button>'+
+          '<button class="open-fnd-btn" id="delist-connect-btn" onclick="connectDelistWalletAndCheck()">'+
+            (delistAddr?'[◆ wallet connected]':'Connect wallet to delist')+
+          '</button>'+
           '<a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" class="open-fnd-btn" style="text-decoration:none">Gas prices ↗</a>'+
         '</div>'+
       '</div>'
@@ -1104,7 +1109,7 @@ function nftCard(n,i,total){
     :(n.image?'<img src="'+n.image+'" loading="lazy" onload="imgLoaded(this)" onerror="imgLoaded(this)">':'')
   let lastBtn;
   if(n.status==='listed'){
-    lastBtn='<button class="nb nb-fnd" onclick="openUrl('+i+',\''+fndUrl+'\')" title="Open on Foundation to delist">Delist on Fnd ↗</button>';
+    lastBtn='<button class="nb nb-delist" id="delist-btn-'+i+'" onclick="delistCard('+i+')" title="Cancel Foundation listing via your wallet">Delist</button>';
   } else if(chain==='base'){
     lastBtn='<button class="nb" onclick="goBasescan('+i+')" style="border-color:rgba(0,82,255,.4);color:#0052ff">Basescan</button>';
   } else {
@@ -1164,28 +1169,7 @@ function dismissResultsModal(){document.getElementById('results-modal').classLis
 
 /* OPEN ON FOUNDATION - batch delist helper */
 let fndOpenedSet=new Set();
-function openFoundationBatch(count){
-  // Collect unvisited listed NFTs from data model (handles lazy/unrendered cards)
-  const listedCards=[];
-  currentNfts.forEach((n,i)=>{
-    if(n.status==='listed'&&!fndOpenedSet.has(i)){
-      const chain=n.chain||'eth';
-      const url='https://foundation.app/mint/'+chain+'/'+n.contract+'/'+n.tokenId;
-      listedCards.push({i,url});
-    }
-  });
-  if(listedCards.length===0){toast('All listed pieces have already been opened.');return;}
-  const toOpen=listedCards.slice(0,count);
-  if(toOpen.length===0){toast('No listed pieces to open.');return;}
-  if(count>1){
-    const ok=confirm('This will open '+toOpen.length+' Foundation tab'+(toOpen.length>1?'s':'')+'. Foundation pages are heavy and your browser may slow down temporarily. Continue?');
-    if(!ok)return;
-  }
-  toOpen.forEach(({i,url})=>{
-    if(url){window.open(url,'_blank','noopener');fndOpenedSet.add(i);}
-  });
-  toast('Opened '+toOpen.length+' listing'+(toOpen.length>1?'s':'')+' on Foundation');
-}
+// openFoundationBatch removed — Foundation UI is offline
 
 /* FILTER + GROUP */
 let activeFilter='all';
@@ -1338,7 +1322,7 @@ function selectListed(){
   const count=currentNfts.filter(n=>n.status==='listed').length;
   const btn=document.querySelector('.rb.rba');
   if(btn)btn.textContent='Deselect visible';
-  toast('['+count+' listed selected]. Pin free now. Use Delist buttons on each card for Foundation.');
+  toast('['+count+' listed selected]. Pin free now, then use Delist on each card to cancel via your wallet.');
 }
 
 /* PIN */
@@ -1656,6 +1640,320 @@ window.addEventListener('beforeunload',(e)=>{
     if(remainingVisible>0){e.preventDefault();e.returnValue='';}
   }
 });
+
+// ── DELIST SYSTEM v2 ─────────────────────────────────────────────────────────
+// EIP-6963 multi-wallet picker + Foundation legacy market cancel.
+// Never auto-connects. Never auto-selects. User picks their wallet explicitly.
+
+const ETH_MARKET  = '0xcda72070e455bb31c7690a170224ce43623d0b6f';
+const BASE_MARKET = '0x7b503e206db34148ad77e00afe214034edf9e3ff';
+const CHAIN_IDS   = { eth: 1, base: 8453 };
+const CHAIN_NAMES = { 1: 'Ethereum', 8453: 'Base' };
+
+const MARKET_ABI = [
+  'function getBuyPrice(address nftContract, uint256 tokenId) view returns (address seller, uint256 price)',
+  'function cancelBuyPrice(address nftContract, uint256 tokenId)',
+  'function getReserveAuctionIdFor(address nftContract, uint256 tokenId) view returns (uint256)',
+  'function getReserveAuction(uint256 auctionId) view returns (address seller, address nftContract, uint256 tokenId, uint256 duration, uint256 extensionDuration, uint256 endTime, address bidder, uint256 amount)',
+  'function cancelReserveAuction(uint256 auctionId)',
+];
+
+// ── EIP-6963 Provider Discovery ───────────────────────────────────────────────
+const discoveredProviders = new Map(); // rdns → { info, provider }
+
+window.addEventListener('eip6963:announceProvider', (e) => {
+  const { info, provider } = e.detail;
+  discoveredProviders.set(info.rdns, { info, provider });
+  // Refresh picker if it's open
+  if (!document.getElementById('wallet-picker-modal').classList.contains('open')) return;
+  renderWalletPickerList();
+});
+window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+// ── Session wallet state ──────────────────────────────────────────────────────
+let delistProvider  = null;
+let delistSigner    = null;
+let delistAddr      = '';
+let delistWalletName = '';
+let activeChainId   = null;
+
+function getMarketContract(chain, signerOrProvider) {
+  return new ethers.Contract(
+    chain === 'base' ? BASE_MARKET : ETH_MARKET,
+    MARKET_ABI,
+    signerOrProvider
+  );
+}
+
+// ── Wallet Picker ─────────────────────────────────────────────────────────────
+function showWalletPicker() {
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+  setTimeout(() => {
+    renderWalletPickerList();
+    document.getElementById('wallet-picker-modal').classList.add('open');
+  }, 80);
+}
+
+function renderWalletPickerList() {
+  const list = document.getElementById('wallet-picker-list');
+  if (!list) return;
+
+  const providers = [...discoveredProviders.values()];
+
+  // Fallback: window.ethereum exists but no EIP-6963
+  const hasLegacy = !providers.length && window.ethereum;
+
+  if (!providers.length && !hasLegacy) {
+    list.innerHTML = '<div style="font-size:13px;color:var(--t2);text-align:center;padding:1rem">No browser wallet detected.<br>Install MetaMask or Coinbase Wallet.</div>';
+    return;
+  }
+
+  const items = providers.length
+    ? providers.map(({ info, provider }) => `
+        <button class="wallet-option" onclick="selectWallet('${info.rdns}')">
+          <img src="${info.icon}" width="28" height="28" style="border-radius:6px;flex-shrink:0" onerror="this.style.display='none'">
+          <span style="font-size:14px;font-weight:600">${info.name}</span>
+        </button>`)
+    : [`<button class="wallet-option" onclick="selectLegacyWallet()">
+        <span style="font-size:20px">🦊</span>
+        <span style="font-size:14px;font-weight:600">Browser Wallet</span>
+      </button>`];
+
+  list.innerHTML = items.join('');
+}
+
+async function selectWallet(rdns) {
+  const entry = discoveredProviders.get(rdns);
+  if (!entry) return;
+  await connectWithProvider(entry.provider, entry.info.name);
+}
+
+async function selectLegacyWallet() {
+  if (!window.ethereum) return;
+  await connectWithProvider(window.ethereum, 'Browser Wallet');
+}
+
+async function connectWithProvider(rawProvider, walletName) {
+  closeWalletPicker();
+  try {
+    await rawProvider.request({ method: 'eth_requestAccounts' });
+    delistProvider  = new ethers.providers.Web3Provider(rawProvider, 'any');
+    delistSigner    = delistProvider.getSigner();
+    delistAddr      = (await delistSigner.getAddress()).toLowerCase();
+    delistWalletName = walletName;
+    const network   = await delistProvider.getNetwork();
+    activeChainId   = network.chainId;
+
+    // Listen for chain/account changes
+    rawProvider.on('chainChanged', () => location.reload());
+    rawProvider.on('accountsChanged', (accts) => {
+      if (!accts.length) disconnectWallet();
+      else location.reload();
+    });
+
+    updateWalletBar();
+    toast('[' + walletName + ' connected] ' + delistAddr.slice(0,6) + '...' + delistAddr.slice(-4));
+  } catch (e) {
+    if (e.code !== 4001) toast('Could not connect: ' + (e.message || 'unknown error').slice(0, 80));
+  }
+}
+
+function closeWalletPicker() {
+  document.getElementById('wallet-picker-modal').classList.remove('open');
+}
+
+function disconnectWallet() {
+  delistProvider = null; delistSigner = null;
+  delistAddr = ''; delistWalletName = ''; activeChainId = null;
+  updateWalletBar();
+  toast('Wallet disconnected.');
+}
+
+function updateWalletBar() {
+  const bar   = document.getElementById('wallet-status-bar');
+  const cbtn  = document.getElementById('delist-connect-btn');
+  if (!bar) return;
+
+  if (!delistAddr) {
+    bar.style.display = 'none';
+    if (cbtn) { cbtn.textContent = 'Connect wallet to delist'; cbtn.style.color = ''; cbtn.style.borderColor = ''; }
+    return;
+  }
+
+  const short    = delistAddr.slice(0,6) + '...' + delistAddr.slice(-4);
+  const netName  = CHAIN_NAMES[activeChainId] || ('Chain ' + activeChainId);
+  const netOk    = activeChainId === 1 || activeChainId === 8453;
+  const netColor = netOk ? '#5dba85' : '#e06060';
+
+  bar.style.display = 'flex';
+  bar.innerHTML =
+    '<span style="font-family:var(--mono);font-size:11px;color:#5dba85">[◆ ' + delistWalletName + ']</span>' +
+    '<span style="font-family:var(--mono);font-size:11px;color:var(--t1)">' + short + '</span>' +
+    '<span style="font-family:var(--mono);font-size:11px;color:' + netColor + '">' + netName + '</span>' +
+    '<button onclick="showWalletPicker()" style="font-family:var(--mono);font-size:10px;padding:2px 8px;border:.5px solid var(--b1);border-radius:4px;background:transparent;color:var(--t2);cursor:pointer">change</button>' +
+    '<button onclick="disconnectWallet()" style="font-family:var(--mono);font-size:10px;padding:2px 8px;border:.5px solid var(--b1);border-radius:4px;background:transparent;color:var(--t2);cursor:pointer">disconnect</button>';
+
+  if (cbtn) { cbtn.textContent = '[◆ connected — ' + short + ']'; cbtn.style.color = '#5dba85'; cbtn.style.borderColor = 'var(--gborder)'; }
+}
+
+async function connectDelistWalletAndCheck() {
+  if (delistAddr) { toast('Already connected: ' + delistAddr.slice(0,6) + '...' + delistAddr.slice(-4)); return; }
+  showWalletPicker();
+}
+
+// ── Chain switching ───────────────────────────────────────────────────────────
+async function ensureChain(chain) {
+  const targetId   = CHAIN_IDS[chain] || 1;
+  const targetHex  = '0x' + targetId.toString(16);
+  const network    = await delistProvider.getNetwork();
+  if (network.chainId === targetId) return true;
+
+  try {
+    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: targetHex }] });
+  } catch (switchErr) {
+    // Chain not added to wallet (common for Base)
+    if (switchErr.code === 4902 && chain === 'base') {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: '0x2105',
+            chainName: 'Base',
+            nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+            rpcUrls: ['https://mainnet.base.org'],
+            blockExplorerUrls: ['https://basescan.org'],
+          }],
+        });
+      } catch {
+        toast('Please add Base network to your wallet manually.');
+        return false;
+      }
+    } else {
+      toast('Please switch your wallet to ' + (chain === 'base' ? 'Base' : 'Ethereum') + ' mainnet.');
+      return false;
+    }
+  }
+
+  // Refresh provider after switch
+  delistProvider  = new ethers.providers.Web3Provider(window.ethereum, 'any');
+  delistSigner    = delistProvider.getSigner();
+  activeChainId   = targetId;
+  updateWalletBar();
+  return true;
+}
+
+// ── Button state machine ──────────────────────────────────────────────────────
+function setDelistBtn(cardIdx, state, customText) {
+  const btn = document.getElementById('delist-btn-' + cardIdx);
+  if (!btn) return;
+  const S = {
+    idle:      { text: 'Delist',                   cls: 'nb nb-delist',  dis: false },
+    checking:  { text: 'Checking on-chain...',     cls: 'nb nb-delist',  dis: true  },
+    gas:       { text: 'Estimating gas...',        cls: 'nb nb-delist',  dis: true  },
+    confirm:   { text: 'Confirm in wallet',        cls: 'nb nb-delist',  dis: true  },
+    pending:   { text: 'Transaction sent...',      cls: 'nb nb-delist',  dis: true  },
+    success:   { text: '✓ Delisted',               cls: 'nb nbpin',      dis: true  },
+    failed:    { text: 'Failed — retry',           cls: 'nb nb-delist',  dis: false },
+    nobid:     { text: 'Auction has bids',         cls: 'nb nbdl',       dis: true  },
+    notlisted: { text: 'Not listed on-chain',      cls: 'nb nbdl',       dis: true  },
+  };
+  const s = S[state] || S.idle;
+  btn.textContent = customText || s.text;
+  btn.className   = s.cls;
+  btn.disabled    = s.dis;
+  if (state === 'success') { btn.style.background = 'rgba(45,122,80,0.35)'; btn.style.opacity = '1'; }
+}
+
+// ── Core delist logic ─────────────────────────────────────────────────────────
+async function delistCard(cardIdx) {
+  // Step 1: ensure wallet connected (show picker if not)
+  if (!delistSigner) {
+    showWalletPicker();
+    // Wait for user to connect — they'll need to click the card button again
+    toast('Connect your wallet first, then click "Cancel listing" again.');
+    return;
+  }
+
+  const card     = document.getElementById('card-' + cardIdx);
+  if (!card) return;
+  const contract = card.dataset.contract;
+  const tokenId  = card.dataset.tokenid;
+  const chain    = card.dataset.chain || 'eth';
+
+  setDelistBtn(cardIdx, 'checking');
+
+  // Step 2: ensure correct network
+  const chainOk = await ensureChain(chain);
+  if (!chainOk) { setDelistBtn(cardIdx, 'idle'); return; }
+
+  delistSigner = delistProvider.getSigner();
+  delistAddr   = (await delistSigner.getAddress()).toLowerCase();
+
+  const readMarket = getMarketContract(chain, delistProvider);
+  const txMarket   = getMarketContract(chain, delistSigner);
+
+  try {
+    // ── Check buy-now listing ──────────────────────────────────────────────
+    // Unset listing returns seller=0x0 + price=MaxUint256 — do NOT check price
+    const [seller] = await readMarket.getBuyPrice(contract, tokenId);
+
+    if (seller.toLowerCase() === delistAddr) {
+      setDelistBtn(cardIdx, 'confirm');
+      try {
+        const tx = await txMarket.cancelBuyPrice(contract, tokenId);
+        setDelistBtn(cardIdx, 'pending');
+        await tx.wait();
+        setDelistBtn(cardIdx, 'success');
+        const badge = document.getElementById('badge-' + cardIdx);
+        if (badge) { badge.className = 'sbadge sb-safe'; badge.textContent = '[delisted]'; }
+        toast('[◆] Listing cancelled. You can now relist on Zora, Manifold, or wherever you choose.');
+        return;
+      } catch (e) {
+        if (e.code === 4001) { setDelistBtn(cardIdx, 'idle'); toast('Transaction rejected.'); }
+        else { setDelistBtn(cardIdx, 'failed'); toast('Cancel failed: ' + (e?.reason || e?.message || 'unknown').slice(0,80)); }
+        return;
+      }
+    }
+
+    // ── Check reserve auction ──────────────────────────────────────────────
+    const auctionId = await readMarket.getReserveAuctionIdFor(contract, tokenId);
+    if (!auctionId.isZero()) {
+      const auction  = await readMarket.getReserveAuction(auctionId);
+      const isSeller = auction.seller.toLowerCase() === delistAddr;
+      const hasBids  = !auction.endTime.isZero(); // endTime !== 0 = bid received
+
+      if (!isSeller) { setDelistBtn(cardIdx, 'notlisted'); return; }
+      if (hasBids)   { setDelistBtn(cardIdx, 'nobid'); toast('This auction already has bids and cannot be cancelled.'); return; }
+
+      setDelistBtn(cardIdx, 'confirm');
+      try {
+        const tx = await txMarket.cancelReserveAuction(auctionId);
+        setDelistBtn(cardIdx, 'pending');
+        await tx.wait();
+        setDelistBtn(cardIdx, 'success');
+        const badge = document.getElementById('badge-' + cardIdx);
+        if (badge) { badge.className = 'sbadge sb-safe'; badge.textContent = '[delisted]'; }
+        toast('[◆] Auction cancelled. You can now relist wherever you choose.');
+        return;
+      } catch (e) {
+        if (e.code === 4001) { setDelistBtn(cardIdx, 'idle'); toast('Transaction rejected.'); }
+        else { setDelistBtn(cardIdx, 'failed'); toast('Cancel failed: ' + (e?.reason || e?.message || 'unknown').slice(0,80)); }
+        return;
+      }
+    }
+
+    // Nothing found for this wallet
+    setDelistBtn(cardIdx, 'notlisted');
+    toast('No active Foundation listing found for this piece under your connected wallet.');
+
+  } catch (e) {
+    console.error('Delist error:', e);
+    setDelistBtn(cardIdx, 'failed', 'Error — retry');
+    toast('Could not check listing: ' + (e?.message || 'unknown').slice(0,80));
+  }
+}
+// ── END DELIST SYSTEM ─────────────────────────────────────────────────────────
+
 </script>
 
 <button class="btt" id="btt-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})">[▲] top</button>
@@ -1692,7 +1990,7 @@ window.addEventListener('beforeunload',(e)=>{
       </div>
       <div class="rinfo-row">
         <span class="rinfo-badge sb-listed">[listed]</span>
-        <span class="rinfo-text">Listed on Foundation. Pin now, delist when ready to move platforms. Use the Delist button on the card.</span>
+        <span class="rinfo-text">Listed on Foundation. Pin now, then use the Delist button on each card to cancel via your wallet. Foundation's UI is offline — delisting is done here directly.</span>
       </div>
       <div class="rinfo-row">
         <span class="rinfo-badge sb-sold">[sold]</span>
@@ -1714,6 +2012,28 @@ window.addEventListener('beforeunload',(e)=>{
     </div>
   </div>
 </div>
+
+
+<!-- WALLET PICKER MODAL -->
+<div class="wallet-picker-modal-bg" id="wallet-picker-modal" onclick="if(event.target===this)closeWalletPicker()">
+  <div class="wallet-picker-box">
+    <div class="wallet-picker-head">
+      <span class="wallet-picker-title">[connect wallet]</span>
+      <button class="mx" onclick="closeWalletPicker()">✕</button>
+    </div>
+    <div class="wallet-picker-body">
+      <div class="wallet-picker-note">
+        This tool interacts directly with Foundation's original marketplace contracts.
+        You can verify all transactions in your wallet before confirming.<br><br>
+        <strong style="color:var(--t0)">No approvals. No custody. You stay in control.</strong>
+      </div>
+      <div id="wallet-picker-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- WALLET STATUS BAR (injected into delist bar) -->
+<div id="wallet-status-bar" class="wallet-status-bar" style="display:none;margin:0 0 10px 0;max-width:940px;margin-left:auto;margin-right:auto"></div>
 
 </body>
 </html>
