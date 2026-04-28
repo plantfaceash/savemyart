@@ -1,4 +1,4 @@
-// api/scan.js — v2.2  
+// api/scan.js — v2.2
 // Scans ETH + Base for NFTs minted to wallet (from=0x0).
 // factory() is a SOFT TAGGER (sets isFoundation=true), NOT a filter.
 // Returns ALL CID-bearing mints + contractDeployer + resolved address.
@@ -87,7 +87,7 @@ export default async function handler(req, res) {
           toBlock: 'latest',
           fromAddress: '0x0000000000000000000000000000000000000000',
           toAddress: resolvedAddress,
-          category: ['erc721'],
+          category: ['erc721', 'erc1155'],
           withMetadata: false,
           excludeZeroValue: false,
           maxCount: '0x3e8',
@@ -97,7 +97,7 @@ export default async function handler(req, res) {
         for (const tx of (data?.transfers || [])) {
           const contract = tx.rawContract?.address?.toLowerCase();
           if (!contract) continue;
-          const tokenId = normaliseTokenId(tx.erc721TokenId || tx.tokenId);
+          const tokenId = normaliseTokenId(tx.erc721TokenId || tx.erc1155Metadata?.[0]?.tokenId || tx.tokenId);
           if (!tokenId) continue;
           mintedTokens.push({ contract, tokenId, chain });
         }
