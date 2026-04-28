@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -1114,8 +1115,8 @@ function nftCard(n,i,total){
   const grads=['g1','g2','g3','g4','g5','g6'];
   const grad=grads[i%grads.length];
   const alreadyPinned=pinned.has(i);
-  const sc=alreadyPinned?'sb-safe':({'held':'sb-held','listed':'sb-listed','sold':'sb-sold','burned':'sb-backup','unknown':'sb-backup'}[n.status]||'sb-backup');
-  const sl=alreadyPinned?'[safe]':({'held':'[held]','listed':'[listed]','sold':'[sold]','burned':'[status unknown]','unknown':'[status unknown]'}[n.status]||'[status unknown]');
+  const sc=n.status==='listed'?'sb-listed':(alreadyPinned?'sb-safe':({'held':'sb-held','sold':'sb-sold','burned':'sb-backup','unknown':'sb-backup'}[n.status]||'sb-backup'));
+  const sl=n.status==='listed'?'[listed]':(alreadyPinned?'[safe]':({'held':'[held]','sold':'[sold]','burned':'[status unknown]','unknown':'[status unknown]'}[n.status]||'[status unknown]'));
   // Single source of truth: use server-provided has_cid/display_cid, fall back to derived
   const hasCid=!!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media));
   const displayCid=n.display_cid||n.cid_meta||n.cid_media||null;
