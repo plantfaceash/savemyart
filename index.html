@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -439,6 +438,16 @@ body::before{
   letter-spacing:.1em;
   user-select:none;
 }
+
+/* COMMUNITY BACKUP BADGE */
+.comm-badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:#5dba85;background:var(--greenbg);border:.5px solid var(--gborder);border-radius:3px;padding:2px 8px;margin-bottom:8px;white-space:nowrap}
+/* BULK DELIST PANEL */
+.bulk-delist-panel{background:rgba(200,146,42,0.06);border:.5px solid rgba(200,146,42,0.3);border-radius:var(--r3);padding:1.4rem 1.5rem;margin-bottom:1.5rem}
+.bulk-delist-title{font-family:var(--mono);font-size:12px;color:var(--gold);letter-spacing:.1em;margin-bottom:.5rem}
+.bulk-delist-sub{font-size:13px;color:var(--t1);line-height:1.6;margin-bottom:1rem}
+.bulk-delist-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.bulk-delist-status{font-family:var(--mono);font-size:11px;color:var(--t2);margin-top:.75rem;line-height:1.6}
+
 /* WALLET PICKER MODAL */
 .wallet-picker-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:700;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px);padding:1rem}
 .wallet-picker-modal-bg.open{display:flex;animation:fdi .18s ease}
@@ -988,22 +997,26 @@ function showResults(nfts){
     :'';
 
 
-  const delistBar=listedCount>0
-    ?'<div class="delist-bar">'+
-        '<div class="delist-bar-text">'+
-          '<strong>⚠ ['+listedCount+' piece'+(listedCount!==1?'s':'')+' listed on Foundation]</strong> '+
-          'Foundation\'s UI is offline. Cancel your listings directly from here using your wallet. '+
-          '<span class="gas-note">Delisting requires a standard network gas fee (paid to the network, not this site). '+
-          'You can review the transaction in your wallet before confirming.</span>'+
-        '</div>'+
-        '<div class="delist-btns">'+
-          '<button class="open-fnd-btn" id="delist-connect-btn" onclick="connectDelistWalletAndCheck()">'+
-            (delistAddr?'[◆ wallet connected]':'Connect wallet to delist')+
-          '</button>'+
-          '<a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" class="open-fnd-btn" style="text-decoration:none">Gas prices ↗</a>'+
-        '</div>'+
-      '</div>'
-    :'';
+  // ── BULK DELIST PANEL (hero action when listed pieces exist) ──────────────
+  const delistBar = listedCount > 0 ? (
+    '<div class="bulk-delist-panel" id="bulk-delist-panel">'+
+      '<div class="bulk-delist-title">⚠ ['+listedCount+' piece'+(listedCount!==1?' pieces':' piece')+' still listed on Foundation]</div>'+
+      '<div class="bulk-delist-sub">'+
+        'Foundation is offline. You need to cancel your listings on-chain before you can relist anywhere else. '+
+        'Connect your wallet and use the buttons below — each delist costs a small gas fee.'+
+      '</div>'+
+      '<div class="bulk-delist-acts">'+
+        '<button class="btngold" id="bulk-delist-btn" onclick="bulkDelistAll()">'+
+          'Connect wallet &amp; delist all '+listedCount+' pieces'+
+        '</button>'+
+        '<button class="btnghost" onclick="selectListed();document.getElementById(\'collections-wrap\').scrollIntoView({behavior:\'smooth\'})">'+
+          'Select listed pieces individually'+
+        '</button>'+
+        '<a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" class="btnghost" style="text-decoration:none">Gas prices ↗</a>'+
+      '</div>'+
+      '<div class="bulk-delist-status" id="bulk-delist-status"></div>'+
+    '</div>'
+  ) : '';
 
   document.getElementById('results-area').innerHTML=
     '<div class="reshdr">'+
@@ -1149,6 +1162,9 @@ function nftCard(n,i,total){
     '<div class="nftbody">'+
       '<div class="nftt">'+(n.title||'Untitled')+'</div>'+
       '<div class="nftch"><span class="chdot"></span>'+(chain==='base'?'Base':'Ethereum')+' #'+(n.tokenId||'')+'</div>'+
+      (n.isFoundation||FOUNDATION_KNOWN_CONTRACTS.has((n.contract||'').toLowerCase())
+        ?'<div class="comm-badge"><span>◆</span> community backup</div>'
+        :'')+
       '<div class="cidbox"><div class="cidl">Metadata CID</div><div class="cidv" onclick="copyCIDCard('+i+')">'+cidLabel+'</div></div>'+
       '<div class="nftbtns">'+
         pinBtn+
@@ -1760,6 +1776,7 @@ async function connectWithProvider(rawProvider, walletName) {
     updateWalletBar();
     toast('[' + walletName + ' connected] ' + delistAddr.slice(0,6) + '...' + delistAddr.slice(-4));
     if(pendingDelistIdx!==null){const idx=pendingDelistIdx;pendingDelistIdx=null;setTimeout(()=>delistCard(idx),300);}
+    if(pendingBulkDelist){pendingBulkDelist=false;setTimeout(()=>bulkDelistAll(),300);}
     onScanWalletConnected(delistAddr);
   } catch (e) {
     if (e.code !== 4001) toast('Could not connect: ' + (e.message || 'unknown error').slice(0, 80));
@@ -1976,6 +1993,67 @@ async function delistCard(cardIdx) {
     toast('Could not check listing: ' + (e?.message || 'unknown').slice(0,80));
   }
 }
+
+// ── BULK DELIST ───────────────────────────────────────────────────────────────
+// Iterates through all listed pieces one-by-one (one tx per piece).
+// Cannot batch — each cancel is a separate on-chain transaction.
+async function bulkDelistAll() {
+  // Connect wallet first if needed
+  if (!delistSigner) {
+    pendingBulkDelist = true;
+    showWalletPicker();
+    return;
+  }
+
+  const listed = currentNfts.filter(n => n.status === 'listed' && n.isPrimary);
+  if (!listed.length) {
+    toast('No listed pieces found.');
+    return;
+  }
+
+  const btn = document.getElementById('bulk-delist-btn');
+  const status = document.getElementById('bulk-delist-status');
+  if (btn) { btn.disabled = true; btn.textContent = 'Delisting...'; }
+
+  let done = 0, failed = 0, skipped = 0;
+
+  for (const n of listed) {
+    const idx = n._idx;
+    if (status) status.textContent =
+      '[' + (done+failed+skipped+1) + '/' + listed.length + '] Processing "' + (n.title || 'Untitled') + '"...';
+
+    // Skip already delisted
+    const btn2 = document.getElementById('delist-btn-' + idx);
+    if (btn2 && btn2.textContent.includes('Delisted')) { skipped++; continue; }
+
+    try {
+      await delistCard(idx);
+      // Check result — if button shows success, count it
+      const b = document.getElementById('delist-btn-' + idx);
+      if (b && (b.textContent.includes('Delisted') || b.textContent.includes('✓'))) done++;
+      else if (b && b.textContent.includes('bids')) skipped++;
+      else failed++;
+    } catch (e) {
+      failed++;
+    }
+
+    // Small pause between transactions to avoid wallet queue issues
+    await new Promise(r => setTimeout(r, 800));
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Delist all ' + listed.length + ' pieces'; }
+  if (status) {
+    status.innerHTML =
+      '[Done] ' + done + ' delisted' +
+      (failed ? ' · ' + failed + ' failed (retry individually below)' : '') +
+      (skipped ? ' · ' + skipped + ' skipped (has bids or already delisted)' : '');
+  }
+  if (done > 0) toast('[◆] ' + done + ' piece' + (done !== 1 ? 's' : '') + ' delisted successfully.');
+}
+
+let pendingBulkDelist = false;
+// ── END BULK DELIST ───────────────────────────────────────────────────────────
+
 // ── END DELIST SYSTEM ─────────────────────────────────────────────────────────
 
 </script>
