@@ -1,5 +1,15 @@
 
 <!DOCTYPE html>
+<!--
+  SaveMyArt.xyz
+  Built with love for the Foundation community in the chaos of April 2026.
+
+  Your art matters. The community showed up when the platform didn't.
+
+  — Ash (@plantfaceash)
+
+  Free forever. Community owned.
+-->
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
@@ -1098,7 +1108,7 @@ function showResults(nfts){
         btn.disabled=true;
       }
       const badge=document.getElementById('badge-'+i);
-      if(badge){badge.className='sbadge sb-safe';badge.textContent='[safe]';}
+      if(badge&&n.status!=='listed'){badge.className='sbadge sb-safe';badge.textContent='[safe]';}
       const card=document.getElementById('card-'+i);
       if(card)card.classList.add('rescued');
     });
@@ -1422,7 +1432,8 @@ function markPinned(i,title,total,pinnedCid){
   const btn=document.getElementById('pin-'+i);
   if(btn){btn.innerHTML='<a href="https://app.pinata.cloud/pinmanager" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">[◆ saved]</a>';btn.className='nb nbpin pinned';btn.style.opacity='1';btn.style.background='rgba(45,122,80,0.35)';}
   const badge=document.getElementById('badge-'+i);
-  if(badge){badge.className='sbadge sb-safe';badge.textContent='[safe]';}
+  const _nft=currentNfts[i];
+  if(badge&&(!_nft||_nft.status!=='listed')){badge.className='sbadge sb-safe';badge.textContent='[safe]';}
   const rescuedCard=document.getElementById('card-'+i);
   if(rescuedCard)rescuedCard.classList.add('rescued');
   const fill=document.getElementById('pp-fill');
