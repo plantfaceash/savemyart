@@ -143,8 +143,17 @@ export default async function handler(req, res) {
     }
 
     async function fetchMints(rpcUrl, chain) {
-      await fetchERC721Mints(rpcUrl, chain);
-      await fetchERC1155Mints(rpcUrl, chain);
+      // Each call is isolated — if ERC-1155 fails, ERC-721 results are preserved
+      try {
+        await fetchERC721Mints(rpcUrl, chain);
+      } catch (err) {
+        console.error(`ERC-721 scan failed for ${chain}:`, err.message);
+      }
+      try {
+        await fetchERC1155Mints(rpcUrl, chain);
+      } catch (err) {
+        console.error(`ERC-1155 scan failed for ${chain}:`, err.message);
+      }
     }
 
     await fetchMints(RPC, 'eth');
