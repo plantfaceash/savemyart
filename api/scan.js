@@ -1,4 +1,4 @@
-// api/scan.js — v2.2
+// api/scan.js — v2.2  
 // Scans ETH + Base for NFTs minted to wallet (from=0x0).
 // factory() is a SOFT TAGGER (sets isFoundation=true), NOT a filter.
 // Returns ALL CID-bearing mints + contractDeployer + resolved address.
@@ -7,6 +7,7 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
 
   const { address } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
