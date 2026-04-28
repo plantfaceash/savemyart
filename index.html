@@ -282,9 +282,9 @@ h1 em{font-style:italic;color:var(--gold)}
 /* .nftart img moved to shimmer section */
 /* status badges */
 .sbadge{position:absolute;top:10px;right:10px;font-family:var(--mono);font-size:10px;padding:4px 10px;border-radius:10px;font-weight:700;letter-spacing:.04em;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-.sb-backup{background:rgba(140,30,30,0.88);color:#ffc8c8;border:.5px solid rgba(255,100,100,0.35)}
+.sb-backup{background:rgba(50,50,55,0.75);color:#888;border:.5px solid rgba(100,100,110,0.3)}
 .sb-held{background:rgba(25,75,45,0.88);color:#9aedb8;border:.5px solid rgba(60,190,110,0.35)}
-.sb-listed{background:rgba(120,75,10,0.88);color:#ffd080;border:.5px solid rgba(220,150,30,0.35)}
+.sb-listed{background:rgba(160,35,35,0.88);color:#ffb0b0;border:.5px solid rgba(230,80,80,0.45)}
 .sb-sold{background:rgba(20,55,115,0.88);color:#90bdf8;border:.5px solid rgba(70,135,240,0.35)}
 .sb-safe{background:rgba(25,75,45,0.88);color:#9aedb8;border:.5px solid rgba(60,190,110,0.35)}
 /* select checkbox */
@@ -1116,7 +1116,7 @@ function nftCard(n,i,total){
   const grad=grads[i%grads.length];
   const alreadyPinned=pinned.has(i);
   const sc=alreadyPinned?'sb-safe':({'held':'sb-held','listed':'sb-listed','sold':'sb-sold','burned':'sb-backup','unknown':'sb-backup'}[n.status]||'sb-backup');
-  const sl=alreadyPinned?'[safe]':({'held':'[held]','listed':'[listed]','sold':'[sold]','burned':'[burned]','unknown':'[needs backup]'}[n.status]||'[needs backup]');
+  const sl=alreadyPinned?'[safe]':({'held':'[held]','listed':'[listed]','sold':'[sold]','burned':'[status unknown]','unknown':'[status unknown]'}[n.status]||'[status unknown]');
   // Single source of truth: use server-provided has_cid/display_cid, fall back to derived
   const hasCid=!!(n.has_cid!==undefined?n.has_cid:(n.cid_meta||n.cid_media));
   const displayCid=n.display_cid||n.cid_meta||n.cid_media||null;
@@ -1623,7 +1623,7 @@ function doClearSaved(){
       if(badge){
         const st=card.dataset.status||'unknown';
         const sc={'held':'sb-held','listed':'sb-listed','sold':'sb-sold','unknown':'sb-backup'}[st]||'sb-backup';
-        const sl={'held':'[held]','listed':'[listed]','sold':'[sold]','unknown':'[needs backup]'}[st]||'[needs backup]';
+        const sl={'held':'[held]','listed':'[listed]','sold':'[sold]','unknown':'[status unknown]'}[st]||'[status unknown]';
         badge.className='sbadge '+sc;badge.textContent=sl;
       }
     }
@@ -2171,7 +2171,7 @@ function updateCommunityBadges() {
       </div>
 
       <hr class="rinfo-sep">
-      <div style="font-family:var(--mono);font-size:10.5px;color:#5dba85;padding:6px 0 6px 0;letter-spacing:.04em">[saved] or [&#9670; community backup] = secured on IPFS.</div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:#5dba85;padding:6px 0 6px 0;letter-spacing:.04em">[saved] or [&#9670; community backup] = secured. [listed] = needs delisting.</div>
       <div class="rinfo-row">
         <span class="rinfo-badge sb-listed">[listed]</span>
         <span class="rinfo-text">Still listed on Foundation on-chain. Use the Delist button to free it.</span>
@@ -2185,8 +2185,8 @@ function updateCommunityBadges() {
         <span class="rinfo-text">You still own this &#8212; not listed. Safe, but worth pinning.</span>
       </div>
       <div class="rinfo-row">
-        <span class="rinfo-badge" style="background:rgba(60,60,60,.8);color:#888;border:.5px solid rgba(100,100,100,.4)">[no CID]</span>
-        <span class="rinfo-text">No IPFS data found. Cannot pin. Metadata may already be lost.</span>
+        <span class="rinfo-badge" style="background:rgba(50,50,55,.75);color:#888;border:.5px solid rgba(100,100,110,.3)">[status unknown]</span>
+        <span class="rinfo-text">Burned, status unclear, or no IPFS data. Your files are still preserved by the community.</span>
       </div>
       <hr class="rinfo-sep">
       <div class="rinfo-gas">
