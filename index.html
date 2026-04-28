@@ -1687,7 +1687,7 @@ window.addEventListener('eip6963:announceProvider', (e) => {
   const { info, provider } = e.detail;
   discoveredProviders.set(info.rdns, { info, provider });
   // Refresh picker if it's open
-  if (!document.getElementById('wallet-picker-modal').classList.contains('open')) return;
+  const _modal = document.getElementById('wallet-picker-modal'); if (!_modal || !_modal.classList.contains('open')) return;
   renderWalletPickerList();
 });
 window.dispatchEvent(new Event('eip6963:requestProvider'));
