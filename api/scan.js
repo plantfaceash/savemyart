@@ -1,4 +1,4 @@
-// api/scan.js — v2.2 + fixes
+// api/scan.js — v2.2 + fixes :)
 // fromBlock set to 0x0 for both chains (Carly's fix)
 // Debug logging added temporarily to verify Alchemy is returning data
 
@@ -313,9 +313,10 @@ async function rpc(url, method, params) {
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
     signal: AbortSignal.timeout(15000),
   });
-  const d = await r.json();
-  if (d.error) throw new Error(d.error.message || JSON.stringify(d.error));
-  return d.result;
+  let d;
+  try { d = await r.json(); } catch { return method === 'alchemy_getAssetTransfers' ? { transfers: [], pageKey: '' } : null; }
+  if (d && d.error) throw new Error(d.error.message || JSON.stringify(d.error));
+  return d ? d.result : null;
 }
 
 async function fetchJSON(url) {
