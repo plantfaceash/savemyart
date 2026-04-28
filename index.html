@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -499,14 +500,28 @@ body::before{
 <div class="hero">
   <div class="hero-tag"><span class="pulse"></span> For every Foundation artist</div>
   <h1>Your art survived.<br><em>Let's keep it that way.</em></h1>
-  <p class="hero-sub">Your Foundation NFTs still exist. Your NFTs are <strong>still on Ethereum permanently.</strong> What needs saving are the images and metadata. This tool backs them up free in minutes.</p>
+  <p class="hero-sub">Your Foundation NFTs are on Ethereum permanently. The files and metadata have been preserved by the community. If your work is still listed, use this tool to delist it and relist anywhere.</p>
+</div>
+
+<!-- COMMUNITY BANNER -->
+<div class="cdwrap" style="margin-bottom:0;padding-bottom:0">
+  <div style="background:var(--s1);border:.5px solid rgba(93,186,133,0.2);border-radius:var(--r3);padding:14px 18px">
+    <div style="font-family:var(--mono);font-size:10px;color:#5dba85;letter-spacing:.08em;margin-bottom:6px">[the community responded]</div>
+    <p style="font-size:13px;color:var(--t0);margin:0 0 10px 0;line-height:1.5">Foundation has closed. <strong>Your art is safe.</strong> <a href="https://x.com/jalilwahdat/status/2044780332898009405" target="_blank" rel="noopener" style="color:#5dba85;text-decoration:none">Jalil, Jack and ygg pinned 343,000+ pieces</a> indefinitely. <a href="https://www.foundation.app/" target="_blank" rel="noopener" style="color:var(--t2);text-decoration:none;font-size:12px">Foundation's statement &#8599;</a></p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <span style="font-family:var(--mono);font-size:10px;color:var(--t2)">Community tools:</span>
+      <a href="https://x.com/jalilwahdat/status/2044780332898009405" target="_blank" rel="noopener" style="font-family:var(--mono);font-size:11px;color:#5dba85;text-decoration:none;padding:3px 9px;border:.5px solid rgba(93,186,133,0.3);border-radius:var(--r)">&#9670; jalil.eth</a>
+      <a href="https://pin.ripe.wtf" target="_blank" rel="noopener" style="font-family:var(--mono);font-size:11px;color:var(--gold);text-decoration:none;padding:3px 9px;border:.5px solid rgba(200,146,42,0.3);border-radius:var(--r)">pin.ripe.wtf</a>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--t2);padding:3px 9px;border:.5px solid var(--bdr);border-radius:var(--r)">savemyart.xyz</span>
+    </div>
+  </div>
 </div>
 
 <!-- SEARCH — high on page -->
 <div class="swrap" id="rescue">
   <div class="scard">
-    <div class="sc-title">Find and rescue your Foundation art</div>
-    <div class="sc-sub">Enter your wallet address. We scan Ethereum and Base for NFTs minted to your wallet, then show the pieces with IPFS metadata we can preserve. Suspected spam is hidden for review.</div>
+    <div class="sc-title">Find your Foundation art</div>
+    <div class="sc-sub">Enter your wallet address. We scan Ethereum and Base, show your listed pieces at the top, and let you delist directly. Suspected spam is hidden.</div>
     <label class="sc-lbl" for="wallet-addr">Your wallet address</label>
     <div class="sc-row">
       <input class="addrinput" id="wallet-addr" type="text" placeholder="0x... or yourname.eth" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')doRescue()">
@@ -517,7 +532,6 @@ body::before{
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8L2 7h20z"/><circle cx="17" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>
       Connect Wallet
     </button>
-    <p class="wallet-note">Read-only, no signing. Connects your active wallet only.<br>To use a different address, paste it in the field above instead.</p>
     <div class="seed-warning">Never share your seed phrase or private keys with anyone, ever. Verify you are on <strong style="color:var(--gold)">savemyart.xyz</strong> before connecting. Nothing is signed until you approve an individual delist transaction.</div>
     <div class="gasnote">
       <span style="color:#5dba85;flex-shrink:0;margin-top:1px">✓</span>
@@ -529,23 +543,7 @@ body::before{
   </div>
 </div>
 
-<!-- COMMUNITY BANNER -->
-<div class="cdwrap">
-  <div class="cdcard" style="gap:0">
-    <div class="cdinfo" style="margin-bottom:14px">
-      <div class="cdmono" style="color:#5dba85">[the community responded]</div>
-      <div class="cdtitle">Foundation has closed. Your art is safe.</div>
-      <div class="cdsub"><a href="https://x.com/jalilwahdat/status/2044780332898009405" target="_blank" rel="noopener" style="color:#5dba85;text-decoration:none">Jalil, Jack and ygg pinned the entire history of Foundation</a> — 343,000+ pieces preserved indefinitely. Your files are not at risk. <a href="https://www.foundation.app/" target="_blank" rel="noopener" style="color:var(--t2);text-decoration:none">Read Foundation's statement.</a></div>
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding-top:12px;border-top:.5px solid var(--b0)">
-      <span style="font-family:var(--mono);font-size:10.5px;color:var(--t2);letter-spacing:.06em">Tools built by the community:</span>
-      <a href="https://x.com/jalilwahdat/status/2044780332898009405" target="_blank" rel="noopener" style="font-family:var(--mono);font-size:11px;color:#5dba85;text-decoration:none;padding:4px 10px;border:.5px solid rgba(93,186,133,0.3);border-radius:var(--r)">◆ jalil.eth — mass pinning</a>
-      <a href="https://pin.ripe.wtf" target="_blank" rel="noopener" style="font-family:var(--mono);font-size:11px;color:var(--gold);text-decoration:none;padding:4px 10px;border:.5px solid rgba(200,146,42,0.3);border-radius:var(--r)">pin.ripe.wtf</a>
-      <span style="font-family:var(--mono);font-size:11px;color:var(--t0);padding:4px 10px;border:.5px solid var(--bdr);border-radius:var(--r)">savemyart.xyz — you are here</span>
-    </div>
-    <div style="margin-top:12px;font-family:var(--mono);font-size:10.5px;color:#e8a040;padding:8px 12px;background:rgba(200,146,42,0.07);border:.5px solid rgba(200,146,42,0.25);border-radius:var(--r2)">If your work is still listed on Foundation contracts, use the tool below to delist it and relist anywhere.</div>
-  </div>
-</div>
+
 
 <div class="results" id="results-area"></div>
 <div id="completion-area"></div>
@@ -1038,10 +1036,10 @@ function showResults(nfts){
         '<p>'+Object.keys(groups).length+' collection'+(Object.keys(groups).length!==1?'s':'')+' · '+listedCount+' listed · '+soldCount+' sold'+(heldCount>0?' · '+heldCount+' held (collapsed)':'')+' </p>'+
       '</div>'+
       '<div class="resacts">'+
-        '<button class="rb rbg" id="pin-all-btn" onclick="pinAll()">Save all to IPFS</button>'+
+        (listedCount>0?'<button class="rb" style="background:rgba(200,80,40,0.18);border-color:rgba(220,100,60,0.55);color:#e07050;font-weight:700" onclick="bulkDelistAll()">Delist all ('+listedCount+')</button>':'')+
+        '<button class="rb rba" id="pin-all-btn" onclick="pinAll()" style="opacity:.65">Save all to IPFS</button>'+
         '<button class="rb rba" onclick="selectAll()">Select visible</button>'+
-        (hasSaved(currentWallet)?'<button class="rb" onclick="doClearSaved()" style="opacity:.6;font-size:11px">[clear saved]</button>':'')+
-        (listedCount>0?'<button class="rb rbo" onclick="selectListed()">Select listed ('+listedCount+')</button>':'')+
+        (hasSaved(currentWallet)?'<button class="rb" onclick="doClearSaved()" style="opacity:.45;font-size:11px">[clear saved]</button>':'')+
         '<button class="rb rbo" onclick="dlAll()">Download all [JSON]</button>'+
         '<button class="rb rbo" onclick="shareRescued()"><svg style="width:11px;height:11px;fill:currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.73-8.835L1.254 2.25H8.08l4.259 5.629L18.244 2.25z"/></svg> Share</button>'+
         '<button class="reopen-btn" onclick="showResultsModal(true)" title="What does this all mean?">[?] guide</button>'+
@@ -1148,9 +1146,7 @@ function nftCard(n,i,total){
   const pinBtn=alreadyPinned
     ?'<button class="nb nbpin pinned" id="pin-'+i+'" disabled style="opacity:1;background:rgba(45,122,80,0.35)">[◆ saved]</button>'
     :hasCid
-      ?(isListed
-        ?'<a href="#" class="pin-secondary-link" id="pin-'+i+'" onclick="event.preventDefault();pinFromCard('+i+')">save my copy</a>'
-        :'<button class="nb nbpin pulse-anim" id="pin-'+i+'" onclick="pinFromCard('+i+')">Save my copy</button>')
+      ?'<a href="#" class="pin-secondary-link" id="pin-'+i+'" onclick="event.preventDefault();pinFromCard('+i+')">save my copy</a>'
       :'<button class="nb nbpin" id="pin-'+i+'" disabled style="opacity:.3;cursor:not-allowed;animation:none">No CID</button>';
   return '<div class="nftcard'+(alreadyPinned?' rescued':'')+'" id="card-'+i+'"'+
     ' data-idx="'+i+'" data-total="'+total+'"'+
@@ -1959,7 +1955,7 @@ async function delistCard(cardIdx) {
         await tx.wait();
         setDelistBtn(cardIdx, 'success');
         const badge = document.getElementById('badge-' + cardIdx);
-        if (badge) { badge.className = 'sbadge sb-held'; badge.textContent = '[held]'; }
+        if (badge) { badge.className = 'sbadge sb-safe'; badge.textContent = '[delisted]'; }
         const card2=document.getElementById('card-'+cardIdx);
         if(card2){card2.dataset.status='held';}
         toast('[◆] Listing cancelled. Piece is now held. You can relist on Zora, Manifold, or wherever you choose.');
@@ -1988,7 +1984,7 @@ async function delistCard(cardIdx) {
         await tx.wait();
         setDelistBtn(cardIdx, 'success');
         const badge = document.getElementById('badge-' + cardIdx);
-        if (badge) { badge.className = 'sbadge sb-held'; badge.textContent = '[held]'; }
+        if (badge) { badge.className = 'sbadge sb-safe'; badge.textContent = '[delisted]'; }
         const card3=document.getElementById('card-'+cardIdx);
         if(card3){card3.dataset.status='held';}
         toast('[◆] Auction cancelled. Piece is now held. You can relist wherever you choose.');
