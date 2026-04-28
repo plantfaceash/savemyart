@@ -2056,6 +2056,65 @@ let pendingBulkDelist = false;
 
 // ── END DELIST SYSTEM ─────────────────────────────────────────────────────────
 
+// ── COMMUNITY BACKUP DATASET (Jalil / networked-art) ─────────────────────────
+let communityBackupMap = null;
+let communityDatasetLoading = false;
+
+async function loadCommunityDataset() {
+  if (communityBackupMap !== null || communityDatasetLoading) return;
+  communityDatasetLoading = true;
+  try {
+    const r = await fetch('https://raw.githubusercontent.com/networked-art/foundation-ipfs-cids/main/token_cids.csv');
+    if (!r.ok) throw new Error('fetch failed');
+    const text = await r.text();
+    const map = new Map();
+    const lines = text.split('\n');
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const parts = line.split(',');
+      if (parts.length < 3) continue;
+      const key = parts[0].toLowerCase() + ':' + parts[2];
+      map.set(key, { metadata_cid: parts[3] || '', image_cid: parts[4] || '' });
+    }
+    communityBackupMap = map;
+    updateCommunityBadges();
+  } catch {
+    communityBackupMap = new Map();
+  }
+  communityDatasetLoading = false;
+}
+
+function isCommunityBacked(n) {
+  if (!communityBackupMap || !communityBackupMap.size) return false;
+  return communityBackupMap.has((n.contract||'').toLowerCase() + ':' + String(n.tokenId||''));
+}
+
+function updateCommunityBadges() {
+  if (!communityBackupMap || !currentNfts.length) return;
+  currentNfts.forEach((n, i) => {
+    if (!isCommunityBacked(n)) return;
+    const card = document.getElementById('card-' + i);
+    if (!card) return;
+    let cb = card.querySelector('.comm-badge');
+    if (!cb) {
+      cb = document.createElement('div');
+      cb.className = 'comm-badge';
+      const nftch = card.querySelector('.nftch');
+      if (nftch) nftch.after(cb);
+    }
+    cb.innerHTML = '<span>\u25C6</span> community backup';
+    const pinBtn = document.getElementById('pin-' + i);
+    if (pinBtn && !pinBtn.classList.contains('pinned')) {
+      pinBtn.textContent = '[\u25C6 community backup]';
+      pinBtn.disabled = true;
+      pinBtn.className = 'nb nbpin pinned';
+      pinBtn.style.opacity = '1';
+      pinBtn.style.background = 'rgba(45,122,80,0.35)';
+    }
+  });
+}
+
 </script>
 
 <button class="btt" id="btt-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})">[▲] top</button>
@@ -2076,40 +2135,50 @@ let pendingBulkDelist = false;
   <div class="rmodal">
     <div class="rmodal-head">
       <span class="rmodal-title">[what are you looking at?]</span>
-      <button class="mx" onclick="dismissResultsModal()">✕</button>
+      <button class="mx" onclick="dismissResultsModal()">&#x2715;</button>
     </div>
     <div class="rmodal-body">
-      <div style="background:rgba(200,146,42,0.08);border:.5px solid rgba(200,146,42,0.3);border-radius:var(--r2);padding:14px 16px;margin-bottom:4px">
-        <div style="font-family:var(--mono);font-size:11px;color:var(--gold);letter-spacing:.1em;margin-bottom:6px">[important]</div>
-        <p style="font-size:13px;color:var(--t0);line-height:1.65;font-weight:500">This tool does not remember your session.</p>
-        <p style="font-size:12.5px;color:var(--t1);line-height:1.65;margin-top:4px">Once you close this tab, you will need to rescan. For a permanent record, create your own free <a href="https://pinata.cloud" target="_blank" rel="noopener" style="color:var(--gold)">Pinata account</a> and pin your own copies there too.</p>
+
+      <div style="background:rgba(93,186,133,0.08);border:.5px solid rgba(93,186,133,0.45);border-radius:var(--r2);padding:13px 16px;margin-bottom:12px">
+        <div style="font-family:var(--mono);font-size:10.5px;color:#5dba85;letter-spacing:.08em;margin-bottom:5px">[ security check ]</div>
+        <p style="font-size:12.5px;color:var(--t0);line-height:1.6;margin:0">Always confirm you are on <strong style="color:#5dba85;letter-spacing:.02em">savemyart.xyz</strong> before connecting your wallet. This is the only real URL. No team member will ever DM you a link.</p>
       </div>
+
+      <div style="background:rgba(200,146,42,0.07);border:.5px solid rgba(200,146,42,0.28);border-radius:var(--r2);padding:13px 16px;margin-bottom:12px">
+        <div style="font-family:var(--mono);font-size:10.5px;color:var(--gold);letter-spacing:.08em;margin-bottom:6px">[ delisting: what to expect ]</div>
+        <p style="font-size:12.5px;color:var(--t1);line-height:1.65;margin:0 0 7px 0">Foundation's UI is offline. Any piece still listed is <strong style="color:var(--t0)">locked</strong> &#8212; collectors cannot buy it, and you cannot relist it anywhere else until the on-chain listing is cancelled.</p>
+        <p style="font-size:12.5px;color:var(--t1);line-height:1.65;margin:0 0 7px 0">The Delist button calls Foundation's original marketplace contract directly. Your wallet will show you the transaction before you confirm &#8212; <strong style="color:var(--t0)">nothing is signed blindly.</strong></p>
+        <p style="font-size:12.5px;color:var(--t1);line-height:1.65;margin:0"><strong style="color:#5dba85">After delisting:</strong> the NFT returns to your wallet immediately. You are free to relist anywhere &#8212; OpenSea, SuperRare, Manifold, anywhere.</p>
+      </div>
+
+      <div style="background:rgba(30,30,30,.5);border:.5px solid var(--bdr);border-radius:var(--r2);padding:13px 16px;margin-bottom:12px">
+        <div style="font-family:var(--mono);font-size:10.5px;color:var(--t2);letter-spacing:.08em;margin-bottom:6px">[ connecting your wallet ]</div>
+        <p style="font-size:12.5px;color:var(--t1);line-height:1.65;margin:0 0 6px 0">Connecting is read-only until you choose to delist. We never request token approvals, custody, or signatures beyond the individual delist transactions you initiate.</p>
+        <p style="font-size:12.5px;color:var(--t1);line-height:1.65;margin:0">Each delist is one transaction, one piece. You can stop at any time.</p>
+      </div>
+
       <hr class="rinfo-sep">
-      <div style="font-family:var(--mono);font-size:11px;color:#5dba85;padding:8px 0 4px 0;letter-spacing:.04em">[safe] = pinned to IPFS. Backed up independently of Foundation.</div>
-      <div class="rinfo-row">
-        <span class="rinfo-badge sb-held">[held]</span>
-        <span class="rinfo-text">You own this. Pin it free.</span>
-      </div>
+      <div style="font-family:var(--mono);font-size:10.5px;color:#5dba85;padding:6px 0 6px 0;letter-spacing:.04em">[saved] or [&#9670; community backup] = secured on IPFS.</div>
       <div class="rinfo-row">
         <span class="rinfo-badge sb-listed">[listed]</span>
-        <span class="rinfo-text">Listed on Foundation. Pin now, then use the Delist button on each card to cancel via your wallet. Foundation's UI is offline — delisting is done here directly.</span>
+        <span class="rinfo-text">Still listed on Foundation on-chain. Use the Delist button to free it.</span>
       </div>
       <div class="rinfo-row">
         <span class="rinfo-badge sb-sold">[sold]</span>
         <span class="rinfo-text">A collector owns this. Back up the metadata to protect your legacy.</span>
       </div>
       <div class="rinfo-row">
-        <span class="rinfo-badge sb-backup">[needs backup]</span>
-        <span class="rinfo-text">Status unclear. Pin it anyway to be safe.</span>
+        <span class="rinfo-badge sb-held">[held]</span>
+        <span class="rinfo-text">You still own this &#8212; not listed. Safe, but worth pinning.</span>
       </div>
       <div class="rinfo-row">
         <span class="rinfo-badge" style="background:rgba(60,60,60,.8);color:#888;border:.5px solid rgba(100,100,100,.4)">[no CID]</span>
-        <span class="rinfo-text">No IPFS data found. Cannot pin. Pushed to the bottom of your list.</span>
+        <span class="rinfo-text">No IPFS data found. Cannot pin. Metadata may already be lost.</span>
       </div>
       <hr class="rinfo-sep">
       <div class="rinfo-gas">
-        <strong style="color:#5dba85">Pinning: always free.</strong> Delisting: requires a small gas fee.
-        <a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" style="color:#5dba85;display:block;margin-top:4px">Check current gas prices ↗</a>
+        <strong style="color:#5dba85">Pinning is always free.</strong> Delisting costs a small gas fee (usually under $1 on Base, a few dollars on Ethereum).
+        <a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" style="color:#5dba85;display:block;margin-top:5px">Check current gas prices &#8599;</a>
       </div>
     </div>
   </div>
