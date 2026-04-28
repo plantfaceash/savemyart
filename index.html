@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -662,7 +661,7 @@ const DL=new Date('2027-04-15T00:00:00Z');
 function tick(){
   const d=DL-Date.now();if(d<=0)return;
   const dy=Math.floor(d/86400000),h=Math.floor((d%86400000)/3600000),m=Math.floor((d%3600000)/60000),s=Math.floor((d%60000)/1000);
-  ['cd-d','cd-h','cd-m','cd-s'].forEach((id,i)=>document.getElementById(id).textContent=String([dy,h,m,s][i]).padStart(2,'0'));
+  ['cd-d','cd-h','cd-m','cd-s'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=String([dy,h,m,s][i]).padStart(2,'0');});
   const el=document.getElementById('days-left');if(el)el.textContent=dy;
 }
 tick();setInterval(tick,1000);
