@@ -1,8 +1,6 @@
-// api/scan.js — v2.2
-// Scans ETH + Base for NFTs minted to wallet (from=0x0).
-// factory() is a SOFT TAGGER (sets isFoundation=true), NOT a filter.
-// Returns ALL CID-bearing mints + contractDeployer + resolved address.
-// Frontend handles classification (artist's-own vs collected vs spam).
+// api/scan.js — v2.2 + fixes
+// fromBlock set to 0x0 for both chains (Carly's fix)
+// Debug logging added temporarily to verify Alchemy is returning data
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -29,7 +27,6 @@ export default async function handler(req, res) {
   const RPC_BASE = `https://base-mainnet.g.alchemy.com/v2/${KEY}`;
   const NFT_BASE = `https://base-mainnet.g.alchemy.com/nft/v3/${KEY}`;
 
-  // ENS resolution
   let resolvedAddress = input;
   if (isENS) {
     try {
@@ -57,17 +54,15 @@ export default async function handler(req, res) {
     ]),
   };
 
-  // Foundation shared contract (early mints) — always tagged isFoundation=true
   const SHARED = '0x3b3ee1931dc30c1957379fac9aba94d1c48a5405';
 
-  // Foundation factory contracts — contracts deployed by these are Foundation personal collections
   const FOUNDATION_FACTORIES = new Set([
     '0x3b612a5b49e025a6e4ba4ee4fb1ef46d13588059',
     '0x612e2daddc89d91409e40f946f9f7cfe422e777e',
   ]);
 
-  const FACTORY_SELECTOR = '0xc45a0155'; // factory()
-  const OWNER_OF         = '0x6352211e'; // ownerOf(uint256)
+  const FACTORY_SELECTOR = '0xc45a0155';
+  const OWNER_OF         = '0x6352211e';
 
   function normaliseTokenId(rawId) {
     if (!rawId) return null;
@@ -75,14 +70,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ── STAGE 1: Get minted tokens (from=0x0, to=wallet) ────────────────────
     const mintedTokens = [];
 
     async function fetchMints(rpcUrl, chain) {
       let pageKey = '';
       do {
         const params = {
-          fromBlock: chain === 'base' ? '0x0' : '0xB00000',
+          fromBlock: '0x0',
           toBlock: 'latest',
           fromAddress: '0x0000000000000000000000000000000000000000',
           toAddress: resolvedAddress,
@@ -93,6 +87,7 @@ export default async function handler(req, res) {
         };
         if (pageKey) params.pageKey = pageKey;
         const data = await rpc(rpcUrl, 'alchemy_getAssetTransfers', [params]);
+        console.log(`[scan] ${chain} transfers:`, data?.transfers?.length ?? 0);
         for (const tx of (data?.transfers || [])) {
           const contract = tx.rawContract?.address?.toLowerCase();
           if (!contract) continue;
@@ -111,7 +106,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ nfts: [], count: 0, address: resolvedAddress });
     }
 
-    // Deduplicate by contract+tokenId+chain
     const seen = new Set();
     const uniqueTokens = mintedTokens.filter(({ contract, tokenId, chain }) => {
       const key = `${contract}-${tokenId}-${chain}`;
@@ -120,8 +114,6 @@ export default async function handler(req, res) {
       return true;
     });
 
-    // ── STAGE 2: Tag ETH contracts as Foundation (SOFT — does not filter) ──
-    // factory() is now a positive signal only. We process all tokens regardless.
     const uniqueEthContracts = [...new Set(
       uniqueTokens.filter(t => t.chain === 'eth').map(t => t.contract)
     )];
@@ -147,7 +139,6 @@ export default async function handler(req, res) {
       }
     }));
 
-    // ── STAGE 3: Fetch metadata for ALL tokens (no filtering) ──────────────
     const results = new Map();
     for (let i = 0; i < uniqueTokens.length; i += 20) {
       await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
@@ -159,7 +150,6 @@ export default async function handler(req, res) {
           );
           const nft = fmtNFT(data, contract, tokenId);
           nft.chain = chain;
-          // Override: if factory() matched a Foundation factory, force-tag isFoundation
           if (chain === 'eth' && isFoundationContract.get(contract) === true) {
             nft.isFoundation = true;
           }
@@ -188,7 +178,6 @@ export default async function handler(req, res) {
       }));
     }
 
-    // ── STAGE 4: Ownership check (held / listed / sold / burned) ────────────
     for (let i = 0; i < uniqueTokens.length; i += 20) {
       await Promise.all(uniqueTokens.slice(i, i + 20).map(async ({ contract, tokenId, chain }) => {
         const key = `${contract}-${tokenId}-${chain}`;
@@ -223,8 +212,6 @@ export default async function handler(req, res) {
     res.status(500).json({ error: 'Scan failed. Please try again.' });
   }
 }
-
-// ── HELPERS ──────────────────────────────────────────────────────────────────
 
 const FOUNDATION_DOMAINS = [
   'fnd-collections.mypinata.cloud',
