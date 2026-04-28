@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -2107,6 +2106,8 @@ function updateCommunityBadges() {
   if (!communityBackupMap || !currentNfts.length) return;
   currentNfts.forEach((n, i) => {
     if (!isCommunityBacked(n)) return;
+    // Never touch listed pieces — status badge must stay red [listed]
+    if (n.status === 'listed') return;
     const card = document.getElementById('card-' + i);
     if (!card) return;
     let cb = card.querySelector('.comm-badge');
