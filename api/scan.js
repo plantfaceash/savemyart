@@ -79,15 +79,23 @@ export default async function handler(req, res) {
     // ── STAGE 1: Get minted tokens (from=0x0, to=wallet) ────────────────────
     const mintedTokens = [];
 
-    async function fetchMints(rpcUrl, chain) {
+    // Alchemy does not reliably support fromAddress filter when mixing
+    // erc721 + erc1155 in one call. Split into two separate calls per chain.
+    // ERC-721: filter by fromAddress=0x0 (Alchemy handles this reliably)
+    // ERC-1155: filter by toAddress only, detect mints by checking from===0x0 in code
+
+    const ZERO = '0x0000000000000000000000000000000000000000';
+    const fromBlock = (chain) => chain === 'base' ? '0x0' : '0xB00000';
+
+    async function fetchERC721Mints(rpcUrl, chain) {
       let pageKey = '';
       do {
         const params = {
-          fromBlock: chain === 'base' ? '0x0' : '0xB00000',
+          fromBlock: fromBlock(chain),
           toBlock: 'latest',
-          fromAddress: '0x0000000000000000000000000000000000000000',
+          fromAddress: ZERO,
           toAddress: resolvedAddress,
-          category: ['erc721', 'erc1155'],
+          category: ['erc721'],
           withMetadata: false,
           excludeZeroValue: false,
           maxCount: '0x3e8',
@@ -97,12 +105,46 @@ export default async function handler(req, res) {
         for (const tx of (data?.transfers || [])) {
           const contract = tx.rawContract?.address?.toLowerCase();
           if (!contract) continue;
-          const tokenId = normaliseTokenId(tx.erc721TokenId || tx.erc1155Metadata?.[0]?.tokenId || tx.tokenId);
+          const tokenId = normaliseTokenId(tx.erc721TokenId || tx.tokenId);
           if (!tokenId) continue;
           mintedTokens.push({ contract, tokenId, chain });
         }
         pageKey = data?.pageKey || '';
       } while (pageKey);
+    }
+
+    async function fetchERC1155Mints(rpcUrl, chain) {
+      let pageKey = '';
+      do {
+        const params = {
+          fromBlock: fromBlock(chain),
+          toBlock: 'latest',
+          toAddress: resolvedAddress,
+          category: ['erc1155'],
+          withMetadata: false,
+          excludeZeroValue: false,
+          maxCount: '0x3e8',
+        };
+        if (pageKey) params.pageKey = pageKey;
+        const data = await rpc(rpcUrl, 'alchemy_getAssetTransfers', [params]);
+        for (const tx of (data?.transfers || [])) {
+          // Only include mints (from === zero address)
+          if ((tx.from || '').toLowerCase() !== ZERO) continue;
+          const contract = tx.rawContract?.address?.toLowerCase();
+          if (!contract) continue;
+          const tokenId = normaliseTokenId(
+            tx.erc1155Metadata?.[0]?.tokenId || tx.tokenId
+          );
+          if (!tokenId) continue;
+          mintedTokens.push({ contract, tokenId, chain });
+        }
+        pageKey = data?.pageKey || '';
+      } while (pageKey);
+    }
+
+    async function fetchMints(rpcUrl, chain) {
+      await fetchERC721Mints(rpcUrl, chain);
+      await fetchERC1155Mints(rpcUrl, chain);
     }
 
     await fetchMints(RPC, 'eth');
