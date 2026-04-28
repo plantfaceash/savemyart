@@ -1,4 +1,4 @@
-// api/scan.js — v2.2 + fixes 
+// api/scan.js — v2.2 + fixes
 // fromBlock set to 0x0 for both chains (Carly's fix)
 // Debug logging added temporarily to verify Alchemy is returning data
 
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
 
   const KEY = process.env.ALCHEMY_API_KEY;
   if (!KEY) { console.log('[scan] ALCHEMY_API_KEY missing'); return res.status(500).json({ error: 'Not configured' }); }
-  console.log('[scan] KEY present, starting scan for:', resolvedAddress || input);
+  console.log('[scan] KEY present, address:', input);
 
   const RPC      = `https://eth-mainnet.g.alchemy.com/v2/${KEY}`;
   const NFT      = `https://eth-mainnet.g.alchemy.com/nft/v3/${KEY}`;
