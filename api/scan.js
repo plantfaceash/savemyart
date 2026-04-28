@@ -1,4 +1,4 @@
-// api/scan.js — v2.2 + fixes
+// api/scan.js — v2.2 + fixes 
 // fromBlock set to 0x0 for both chains (Carly's fix)
 // Debug logging added temporarily to verify Alchemy is returning data
 
@@ -6,6 +6,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET');
 
+  console.log('[scan] function invoked');
   const { address } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
 
@@ -20,7 +21,8 @@ export default async function handler(req, res) {
   }
 
   const KEY = process.env.ALCHEMY_API_KEY;
-  if (!KEY) return res.status(500).json({ error: 'Not configured' });
+  if (!KEY) { console.log('[scan] ALCHEMY_API_KEY missing'); return res.status(500).json({ error: 'Not configured' }); }
+  console.log('[scan] KEY present, starting scan for:', resolvedAddress || input);
 
   const RPC      = `https://eth-mainnet.g.alchemy.com/v2/${KEY}`;
   const NFT      = `https://eth-mainnet.g.alchemy.com/nft/v3/${KEY}`;
@@ -309,6 +311,7 @@ async function rpc(url, method, params) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    signal: AbortSignal.timeout(15000),
   });
   const d = await r.json();
   if (d.error) throw new Error(d.error.message || JSON.stringify(d.error));
