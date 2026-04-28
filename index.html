@@ -439,6 +439,17 @@ body::before{
   letter-spacing:.1em;
   user-select:none;
 }
+/* WALLET PICKER MODAL */
+.wallet-picker-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:700;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px);padding:1rem}
+.wallet-picker-modal-bg.open{display:flex;animation:fdi .18s ease}
+.wallet-picker-box{background:var(--s1);border:.5px solid var(--b2);border-radius:var(--r3);width:100%;max-width:380px;overflow:hidden}
+.wallet-picker-head{padding:1.25rem 1.5rem 1rem;border-bottom:.5px solid var(--b0);display:flex;align-items:center;justify-content:space-between}
+.wallet-picker-title{font-family:var(--mono);font-size:12px;color:var(--gold);letter-spacing:.1em}
+.wallet-picker-body{padding:1rem 1.25rem 1.5rem;display:flex;flex-direction:column;gap:7px}
+.wallet-picker-note{font-size:11.5px;color:var(--t2);line-height:1.6;padding:10px 12px;background:var(--s2);border-radius:var(--r);margin-bottom:4px}
+.wallet-option{width:100%;display:flex;align-items:center;gap:12px;padding:11px 14px;border:.5px solid var(--b1);border-radius:var(--r2);background:var(--s2);cursor:pointer;font-family:var(--sans);text-align:left;transition:all .15s;color:var(--t0)}
+.wallet-option:hover{border-color:var(--gold);background:var(--gbg2)}
+.wallet-status-bar{display:none;align-items:center;gap:10px;padding:8px 14px;background:var(--s2);border:.5px solid var(--gborder);border-radius:var(--r2);margin-bottom:10px;flex-wrap:wrap}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
 </head>
@@ -985,7 +996,7 @@ function showResults(nfts){
   const delistBar=listedCount>0
     ?'<div class="delist-bar">'+
         '<div class="delist-bar-text">'+
-          '<strong>['+listedCount+' piece'+(listedCount!==1?'s':'')+' listed on Foundation]</strong> '+
+          '<strong>⚠ ['+listedCount+' piece'+(listedCount!==1?'s':'')+' listed on Foundation]</strong> '+
           'Foundation\'s UI is offline. Cancel your listings directly from here using your wallet. '+
           '<span class="gas-note">Delisting requires a standard network gas fee (paid to the network, not this site). '+
           'You can review the transaction in your wallet before confirming.</span>'+
@@ -1908,8 +1919,10 @@ async function delistCard(cardIdx) {
         await tx.wait();
         setDelistBtn(cardIdx, 'success');
         const badge = document.getElementById('badge-' + cardIdx);
-        if (badge) { badge.className = 'sbadge sb-safe'; badge.textContent = '[delisted]'; }
-        toast('[◆] Listing cancelled. You can now relist on Zora, Manifold, or wherever you choose.');
+        if (badge) { badge.className = 'sbadge sb-held'; badge.textContent = '[held]'; }
+        const card2=document.getElementById('card-'+cardIdx);
+        if(card2){card2.dataset.status='held';}
+        toast('[◆] Listing cancelled. Piece is now held. You can relist on Zora, Manifold, or wherever you choose.');
         return;
       } catch (e) {
         if (e.code === 4001) { setDelistBtn(cardIdx, 'idle'); toast('Transaction rejected.'); }
@@ -1935,8 +1948,10 @@ async function delistCard(cardIdx) {
         await tx.wait();
         setDelistBtn(cardIdx, 'success');
         const badge = document.getElementById('badge-' + cardIdx);
-        if (badge) { badge.className = 'sbadge sb-safe'; badge.textContent = '[delisted]'; }
-        toast('[◆] Auction cancelled. You can now relist wherever you choose.');
+        if (badge) { badge.className = 'sbadge sb-held'; badge.textContent = '[held]'; }
+        const card3=document.getElementById('card-'+cardIdx);
+        if(card3){card3.dataset.status='held';}
+        toast('[◆] Auction cancelled. Piece is now held. You can relist wherever you choose.');
         return;
       } catch (e) {
         if (e.code === 4001) { setDelistBtn(cardIdx, 'idle'); toast('Transaction rejected.'); }
