@@ -1,4 +1,4 @@
-// api/scan.js — v2.2 + fixes :)
+// api/scan.js — v2.2 + fixes
 // fromBlock set to 0x0 for both chains (Carly's fix)
 // Debug logging added temporarily to verify Alchemy is returning data
 
