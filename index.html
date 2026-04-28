@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -652,25 +653,24 @@ tick();setInterval(tick,1000);
 
 /* WALLET CONNECT */
 async function connectWallet(){
+  // Uses EIP-6963 picker — stores a pending callback to fill the scan address
+  pendingScanConnect=true;
+  showWalletPicker();
+}
+
+// Called after EIP-6963 wallet connects — if triggered from scan card, fill address + scan
+let pendingScanConnect=false;
+function onScanWalletConnected(addr){
+  if(!pendingScanConnect)return;
+  pendingScanConnect=false;
   const btn=document.getElementById('wallet-btn');
-  if(typeof window.ethereum==='undefined'){
-    toast('No browser wallet detected. Paste your address above instead.');return;
+  if(btn){
+    btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5dba85" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Connected';
+    btn.style.borderColor='var(--gborder)';btn.style.color='#5dba85';
   }
-  btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Connecting...';
-  try{
-    const accounts=await window.ethereum.request({method:'eth_requestAccounts'});
-    if(accounts&&accounts[0]){
-      document.getElementById('wallet-addr').value=accounts[0];
-      btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5dba85" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Connected';
-      btn.style.borderColor='var(--gborder)';btn.style.color='#5dba85';
-      toast('[Connected: '+accounts[0].slice(0,6)+'...'+accounts[0].slice(-4)+'] — to use a different address, paste it above.');
-      setTimeout(()=>doRescue(),400);
-    }
-  }catch(err){
-    btn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8L2 7h20z"/><circle cx="17" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg> Connect Wallet';
-    if(err.code===4001)toast('Cancelled. Paste your address above instead.');
-    else toast('Could not connect. Paste your address above.');
-  }
+  document.getElementById('wallet-addr').value=addr;
+  toast('[Connected: '+addr.slice(0,6)+'...'+addr.slice(-4)+'] — to use a different address, paste it above.');
+  setTimeout(()=>doRescue(),400);
 }
 
 /* SCAN */
@@ -1753,6 +1753,8 @@ async function connectWithProvider(rawProvider, walletName) {
 
     updateWalletBar();
     toast('[' + walletName + ' connected] ' + delistAddr.slice(0,6) + '...' + delistAddr.slice(-4));
+    if(pendingDelistIdx!==null){const idx=pendingDelistIdx;pendingDelistIdx=null;setTimeout(()=>delistCard(idx),300);}
+    onScanWalletConnected(delistAddr);
   } catch (e) {
     if (e.code !== 4001) toast('Could not connect: ' + (e.message || 'unknown error').slice(0, 80));
   }
@@ -1865,13 +1867,14 @@ function setDelistBtn(cardIdx, state, customText) {
 }
 
 // ── Core delist logic ─────────────────────────────────────────────────────────
+let pendingDelistIdx = null; // auto-retry after wallet connects
+
 async function delistCard(cardIdx) {
-  // Step 1: ensure wallet connected (show picker if not)
+  // Step 1: ensure wallet connected — open picker, auto-retry on connect
   if (!delistSigner) {
+    pendingDelistIdx = cardIdx;
     showWalletPicker();
-    // Wait for user to connect — they'll need to click the card button again
-    toast('Connect your wallet first, then click "Cancel listing" again.');
-    return;
+    return; // picker is self-explanatory, no toast needed
   }
 
   const card     = document.getElementById('card-' + cardIdx);
