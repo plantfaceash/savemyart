@@ -2183,26 +2183,57 @@ function updateCommunityBadges() {
       </div>
 
       <hr class="rinfo-sep">
-      <div style="font-family:var(--mono);font-size:10.5px;color:#5dba85;padding:6px 0 6px 0;letter-spacing:.04em">[saved] or [&#9670; community backup] = secured. [listed] = needs delisting.</div>
+
+      <div style="font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.08em;padding:4px 0 8px 0">[ card badges ]</div>
+
       <div class="rinfo-row">
         <span class="rinfo-badge sb-listed">[listed]</span>
-        <span class="rinfo-text">Still listed on Foundation on-chain. Use the Delist button to free it.</span>
-      </div>
-      <div class="rinfo-row">
-        <span class="rinfo-badge sb-sold">[sold]</span>
-        <span class="rinfo-text">A collector owns this. Back up the metadata to protect your legacy.</span>
+        <span class="rinfo-text"><strong style="color:var(--t0)">Needs action.</strong> This piece is still listed on Foundation contracts on-chain. Collectors cannot buy it and you cannot relist it elsewhere until you delist it. Use the red Delist button.</span>
       </div>
       <div class="rinfo-row">
         <span class="rinfo-badge sb-held">[held]</span>
-        <span class="rinfo-text">You still own this &#8212; not listed. Safe, but worth pinning.</span>
+        <span class="rinfo-text">You own this piece and it is not listed anywhere. Safe to hold or relist whenever you are ready.</span>
+      </div>
+      <div class="rinfo-row">
+        <span class="rinfo-badge sb-sold">[sold]</span>
+        <span class="rinfo-text">A collector owns this. The files are preserved by the community.</span>
       </div>
       <div class="rinfo-row">
         <span class="rinfo-badge" style="background:rgba(50,50,55,.75);color:#888;border:.5px solid rgba(100,100,110,.3)">[status unknown]</span>
-        <span class="rinfo-text">Burned, status unclear, or no IPFS data. Your files are still preserved by the community.</span>
+        <span class="rinfo-text">Burned, transferred, or status unclear. No action needed — files are preserved by the community.</span>
       </div>
+      <div class="rinfo-row">
+        <span class="rinfo-badge sb-safe">[delisted]</span>
+        <span class="rinfo-text">Successfully delisted. The piece is back in your wallet and free to relist anywhere.</span>
+      </div>
+      <div class="rinfo-row">
+        <span class="rinfo-badge sb-safe">[safe]</span>
+        <span class="rinfo-text">You have saved your own copy of this piece to IPFS via Pinata.</span>
+      </div>
+
+      <hr class="rinfo-sep">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--t2);letter-spacing:.08em;padding:4px 0 8px 0">[ card buttons ]</div>
+
+      <div class="rinfo-row">
+        <span class="rinfo-badge" style="background:rgba(160,35,35,0.5);color:#ffb0b0;border:.5px solid rgba(230,80,80,0.4);font-family:var(--mono);font-size:11px">Delist now</span>
+        <span class="rinfo-text">Cancels the Foundation on-chain listing via your wallet. One transaction, one piece. Gas required.</span>
+      </div>
+      <div class="rinfo-row">
+        <span class="rinfo-badge" style="background:rgba(93,186,133,0.12);color:#5dba85;border:.5px solid rgba(93,186,133,0.3);font-family:var(--mono);font-size:11px">&#9670; community backup</span>
+        <span class="rinfo-text">This piece is already in Jalil's dataset — 343,000+ Foundation pieces pinned indefinitely. Your files are safe.</span>
+      </div>
+      <div class="rinfo-row">
+        <span class="rinfo-badge" style="background:transparent;color:var(--t2);border:.5px solid var(--bdr);font-family:var(--mono);font-size:11px">save my copy</span>
+        <span class="rinfo-text">Pins your own personal copy to IPFS via Pinata. Free. Gives you your own redundant backup independent of anyone else.</span>
+      </div>
+      <div class="rinfo-row">
+        <span class="rinfo-badge" style="background:transparent;color:#6b8cba;border:.5px solid rgba(107,140,186,.4);font-family:var(--mono);font-size:11px">Etherscan / Basescan</span>
+        <span class="rinfo-text">Opens the token on the block explorer so you can verify ownership, contract, and transaction history.</span>
+      </div>
+
       <hr class="rinfo-sep">
       <div class="rinfo-gas">
-        <strong style="color:#5dba85">Pinning is always free.</strong> Delisting costs a small gas fee (usually under $1 on Base, a few dollars on Ethereum).
+        <strong style="color:#5dba85">Scanning and saving are always free.</strong> Delisting requires a small gas fee — usually under $1 on Base, a few dollars on Ethereum.
         <a href="https://milkroad.com/ethereum/gas/" target="_blank" rel="noopener" style="color:#5dba85;display:block;margin-top:5px">Check current gas prices &#8599;</a>
       </div>
     </div>
