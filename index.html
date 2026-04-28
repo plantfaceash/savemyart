@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -305,6 +304,10 @@ h1 em{font-style:italic;color:var(--gold)}
 @keyframes glimmer{0%,100%{box-shadow:0 0 0 0 rgba(45,122,80,0)}50%{box-shadow:0 0 8px 2px rgba(45,122,80,.45)}}
 .nbpin.pulse-anim{animation:glimmer 2s ease-in-out infinite}
 .nbpin.pinned{opacity:.5;cursor:default;animation:none}
+.pin-secondary-link{font-family:var(--mono);font-size:10.5px;color:var(--t2);text-decoration:none;padding:4px 6px;opacity:.6;transition:opacity .2s;align-self:center}
+.pin-secondary-link:hover{opacity:1;color:var(--gold)}
+.delist-hero{background:rgba(200,80,40,0.15);border-color:rgba(220,100,60,0.6);color:#e07050;font-weight:700;font-size:13px;padding:9px 18px;flex:1}
+.delist-hero:hover{background:rgba(200,80,40,0.28);border-color:rgba(220,100,60,0.9);color:#f08060}
 .nbdl{background:transparent;border-color:var(--b1);color:var(--t1)}
 .nbdl:hover{border-color:var(--b2);color:var(--t0)}
 .nbeth{background:var(--bluebg);border-color:var(--bborder);color:#6aacf0}
@@ -509,13 +512,13 @@ body::before{
       <input class="addrinput" id="wallet-addr" type="text" placeholder="0x... or yourname.eth" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')doRescue()">
       <button class="rescuebtn" id="rescue-btn" onclick="doRescue()">Rescue my art</button>
     </div>
-    <div class="seed-warning">Never share your seed phrase or private keys with anyone, ever. Verify you are on <strong style="color:var(--gold)">savemyart.xyz</strong> before connecting. This tool only reads your wallet address — nothing is signed until you approve an individual delist transaction.</div>
     <div class="divider-row">or connect your wallet to auto-fill</div>
     <button class="wcbtn" onclick="connectWallet()" id="wallet-btn">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8L2 7h20z"/><circle cx="17" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>
       Connect Wallet
     </button>
     <p class="wallet-note">Read-only, no signing. Connects your active wallet only.<br>To use a different address, paste it in the field above instead.</p>
+    <div class="seed-warning">Never share your seed phrase or private keys with anyone, ever. Verify you are on <strong style="color:var(--gold)">savemyart.xyz</strong> before connecting. Nothing is signed until you approve an individual delist transaction.</div>
     <div class="gasnote">
       <span style="color:#5dba85;flex-shrink:0;margin-top:1px">✓</span>
       <div class="gastext">
@@ -1141,10 +1144,13 @@ function nftCard(n,i,total){
   } else {
     lastBtn='<button class="nb nbeth" onclick="goEtherscan('+i+')" style="border-color:rgba(107,140,186,.4);color:#6b8cba">Etherscan</button>';
   }
+  const isListed = n.status === 'listed';
   const pinBtn=alreadyPinned
     ?'<button class="nb nbpin pinned" id="pin-'+i+'" disabled style="opacity:1;background:rgba(45,122,80,0.35)">[◆ saved]</button>'
     :hasCid
-      ?'<button class="nb nbpin pulse-anim" id="pin-'+i+'" onclick="pinFromCard('+i+')">Save my copy</button>'
+      ?(isListed
+        ?'<a href="#" class="pin-secondary-link" id="pin-'+i+'" onclick="event.preventDefault();pinFromCard('+i+')">save my copy</a>'
+        :'<button class="nb nbpin pulse-anim" id="pin-'+i+'" onclick="pinFromCard('+i+')">Save my copy</button>')
       :'<button class="nb nbpin" id="pin-'+i+'" disabled style="opacity:.3;cursor:not-allowed;animation:none">No CID</button>';
   return '<div class="nftcard'+(alreadyPinned?' rescued':'')+'" id="card-'+i+'"'+
     ' data-idx="'+i+'" data-total="'+total+'"'+
@@ -1174,9 +1180,13 @@ function nftCard(n,i,total){
         :'')+
       '<div class="cidbox"><div class="cidl">Metadata CID</div><div class="cidv" onclick="copyCIDCard('+i+')">'+cidLabel+'</div></div>'+
       '<div class="nftbtns">'+
-        pinBtn+
-        '<button class="nb nbdl" onclick="dlFromCard('+i+')">JSON</button>'+
-        lastBtn+
+        (isListed
+          ?'<button class="nb nb-delist delist-hero" id="delist-btn-'+i+'" onclick="delistCard('+i+')" title="Cancel Foundation listing via your wallet">Delist now</button>'+
+            '<button class="nb nbdl" onclick="dlFromCard('+i+')">JSON</button>'+
+            pinBtn
+          :pinBtn+
+            '<button class="nb nbdl" onclick="dlFromCard('+i+')">JSON</button>'+
+            lastBtn)+
       '</div>'+
     '</div>'+
   '</div>';
@@ -2204,7 +2214,7 @@ function updateCommunityBadges() {
         This tool interacts directly with Foundation's original marketplace contracts.
         You can verify all transactions in your wallet before confirming.<br><br>
         <strong style="color:var(--t0)">No approvals. No custody. You stay in control.</strong><br><br>
-        <span style="font-family:var(--mono);font-size:10.5px;color:#5dba85">Always confirm the URL is savemyart.xyz before connecting. Never share your seed phrase with anyone.</span>
+        <div style="margin-top:10px;font-family:var(--mono);font-size:11px;background:rgba(200,146,42,0.12);border:.5px solid rgba(200,146,42,0.5);border-radius:20px;padding:7px 14px;color:var(--gold);text-align:center">Always confirm: savemyart.xyz &nbsp;·&nbsp; Never share your seed phrase</div>
       </div>
       <div id="wallet-picker-list"></div>
     </div>
