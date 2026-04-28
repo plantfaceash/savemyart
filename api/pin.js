@@ -30,11 +30,12 @@ export default async function handler(req, res) {
   // Gateways raced in parallel — fastest wins.
   // cloudflare-ipfs.com removed (shut down 2023).
   const GATEWAYS = [
-    'https://ipfs.foundation.app/ipfs/',
-    'https://d2ybmb80bbm9ts.cloudfront.net/',
+    // ipfs.foundation.app removed — Foundation servers are offline
+    'https://d2ybmb80bbm9ts.cloudfront.net/', // Foundation CDN (may still work)
     'https://ipfs.io/ipfs/',
     'https://gateway.pinata.cloud/ipfs/',
     'https://dweb.link/ipfs/',
+    'https://cloudflare-ipfs.com/ipfs/',      // back in — Cloudflare restored this
   ];
 
   // Race all gateways — return first successful fetch.
