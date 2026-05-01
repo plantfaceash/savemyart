@@ -889,8 +889,8 @@ function doRescue(){
       } else {
         document.getElementById('results-area').innerHTML=`
           <div class="scanning">
-            <p class="stext">No rescuable NFTs with IPFS data found for this address.</p>
-            <p style="font-size:13px;color:var(--t2);margin-top:8px">Double-check your wallet address and try again. ENS names (name.eth) are supported.</p>
+            <p class="stext">No Foundation NFTs found for this address.</p>
+            <p style="font-size:13px;color:var(--t2);margin-top:8px">Double-check the wallet address — this is the address you minted from, not a connected wallet. ENS names work too. If you just had a delist error, try scanning again.</p>
           </div>`;
         document.getElementById('completion-area').innerHTML='';
         document.getElementById('what-next').style.display='none';
@@ -900,7 +900,6 @@ function doRescue(){
     .catch(err=>{
       clearInterval(stepIv);
       btn.disabled=false;btn.textContent='Rescue my art';btn.classList.remove('scanning-anim');
-      currentNfts=[];selectedCards.clear();pinned.clear();pinnedCount=0;activeFilter='all';
       const msg=err?.message||'Something went wrong. Check your address and try again.';
       document.getElementById('results-area').innerHTML=
         '<div class="scanning">'+
@@ -1954,10 +1953,16 @@ async function delistCard(cardIdx) {
 
   try {
     // ── Check buy-now listing ──────────────────────────────────────────────
-    // Unset listing returns seller=0x0 + price=MaxUint256 — do NOT check price
-    const [seller] = await readMarket.getBuyPrice(contract, tokenId);
+    // Wrap in try/catch — Base market may revert if no buy price listing exists
+    let buyPriceSeller = null;
+    try {
+      const [seller] = await readMarket.getBuyPrice(contract, tokenId);
+      buyPriceSeller = seller;
+    } catch {
+      // No buy price listing or contract doesn't support it — move on to auction check
+    }
 
-    if (seller.toLowerCase() === delistAddr) {
+    if (buyPriceSeller && buyPriceSeller.toLowerCase() === delistAddr) {
       setDelistBtn(cardIdx, 'confirm');
       try {
         const tx = await txMarket.cancelBuyPrice(contract, tokenId);
@@ -1978,8 +1983,13 @@ async function delistCard(cardIdx) {
     }
 
     // ── Check reserve auction ──────────────────────────────────────────────
-    const auctionId = await readMarket.getReserveAuctionIdFor(contract, tokenId);
-    if (!auctionId.isZero()) {
+    let auctionId = null;
+    try {
+      auctionId = await readMarket.getReserveAuctionIdFor(contract, tokenId);
+    } catch {
+      // Contract doesn't support reserve auctions or call failed
+    }
+    if (auctionId && !auctionId.isZero()) {
       const auction  = await readMarket.getReserveAuction(auctionId);
       const isSeller = auction.seller.toLowerCase() === delistAddr;
       const hasBids  = !auction.endTime.isZero(); // endTime !== 0 = bid received
